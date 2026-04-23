@@ -876,6 +876,44 @@ textarea{resize:vertical;min-height:60px}
 
   <!-- Sistema -->
   <div id="cfg-sistema" style="display:none">
+    <!-- Padrões de nova turma -->
+    <div class="card" style="padding:16px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">⚙️ Padrões para nova turma</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Valores pré-preenchidos ao abrir o formulário de nova turma. Você pode alterar na hora.</div>
+      <div class="form-row">
+        <div>
+          <label>Vagas padrão</label>
+          <input type="number" id="cfg-padrao-vagas" min="1" max="20" placeholder="4">
+        </div>
+        <div>
+          <label>Mensalidade padrão (R$)</label>
+          <input type="number" id="cfg-padrao-mens" min="0" placeholder="180">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Cor padrão no calendário</label>
+          <select id="cfg-padrao-cor">
+            <option value="">⚪ Padrão (azul)</option>
+            <option value="#1a6fbd">🔵 Azul</option>
+            <option value="#e91e8c">🩷 Rosa</option>
+            <option value="#2d7a2d">🟢 Verde</option>
+            <option value="#4a3db5">🟣 Roxo</option>
+            <option value="#e65100">🟠 Laranja</option>
+            <option value="#b02020">🔴 Vermelho</option>
+            <option value="#00695c">🩵 Teal</option>
+          </select>
+        </div>
+        <div>
+          <label>Categoria padrão</label>
+          <select id="cfg-padrao-categoria"></select>
+        </div>
+      </div>
+      <div style="margin-top:14px;text-align:right">
+        <button class="btn btn-primary btn-sm" onclick="salvarPadroesTurma()">💾 Salvar padrões</button>
+      </div>
+    </div>
+
     <div class="card" style="padding:16px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:700;margin-bottom:12px">Informações da academia</div>
       <label>Nome da academia / professor</label>
@@ -2179,11 +2217,11 @@ function abrirNovaTurma(){
   document.getElementById('modal-turma-title').textContent='Nova turma';
   document.getElementById('t-hora').value='07:00';
   document.getElementById('t-nome').value='';
-  document.getElementById('t-vagas').value='6';
-  document.getElementById('t-mens').value='200';
+  document.getElementById('t-vagas').value= cfgPadroesTurma.vagas||4;
+  document.getElementById('t-mens').value = cfgPadroesTurma.mens||180;
   atualizarSelectCategoria();
-  document.getElementById('t-categoria').value = cfgCatTurmas[0]?.nome||'';
-  document.getElementById('t-cor').value='';
+  document.getElementById('t-categoria').value = cfgPadroesTurma.categoria||cfgCatTurmas[0]?.nome||'Misto';
+  document.getElementById('t-cor').value = cfgPadroesTurma.cor||'#e91e8c';
   document.querySelectorAll('#t-dias-sel .dia-btn').forEach(b=>b.classList.remove('on'));
   openModal('modal-turma');
 }
@@ -3109,6 +3147,8 @@ let cfgCategorias = ['Iniciante','C','B','A','Open'];
 let cfgGolpesPlano = ['Saque','Smash','Vollée','Bandeja','Vibora','Lob','Drive','Backhand','Drop','Defesa','Deslocamento','Outro'];
 let cfgPgtos = ['PIX','Boleto','Cartão','Dinheiro','Outro'];
 let cfgInfoSistema = {nome:'', tel:'', cidade:''};
+// Padrões para nova turma
+let cfgPadroesTurma = { vagas: 4, mens: 180, cor: '#e91e8c', categoria: '' };
 // Categorias de turma: [{nome, icone, cor}]
 let cfgCatTurmas = [
   {nome:'Misto',      icone:'⚥',  cor:'#1a6fbd'},
@@ -3123,6 +3163,7 @@ function initConfig(){
   if(!cfgAvCategorias) cfgAvCategorias = JSON.parse(JSON.stringify(AV_CATEGORIAS));
   renderCfgAvaliacao();
   renderCfgCatTurmas();
+  renderCfgPadroesTurma();
   renderCfgCategorias();
   renderCfgGolpes();
   renderCfgSistema();
@@ -3136,6 +3177,7 @@ function switchConfigTab(tab, btn){
   if(btn) btn.classList.add('active');
   if(tab==='whatsapp') initCfgWA();
   if(tab==='cat-turma') renderCfgCatTurmas();
+  if(tab==='sistema') renderCfgPadroesTurma();
 }
 
 // ---------- CATEGORIAS DE TURMA ----------
@@ -3304,6 +3346,30 @@ function salvarGolpes(){
 }
 
 // ---------- FORMAS DE PAGAMENTO ----------
+function renderCfgPadroesTurma(){
+  const v = document.getElementById('cfg-padrao-vagas');
+  const m = document.getElementById('cfg-padrao-mens');
+  const c = document.getElementById('cfg-padrao-cor');
+  const ca= document.getElementById('cfg-padrao-categoria');
+  if(v) v.value = cfgPadroesTurma.vagas||4;
+  if(m) m.value = cfgPadroesTurma.mens||180;
+  if(c) c.value = cfgPadroesTurma.cor||'#e91e8c';
+  if(ca){
+    ca.innerHTML = cfgCatTurmas.map(ct=>
+      `<option value="${esc(ct.nome)}" ${ct.nome===(cfgPadroesTurma.categoria||cfgCatTurmas[0]?.nome)?'selected':''}>${ct.icone?ct.icone+' ':''}${ct.nome}</option>`
+    ).join('');
+  }
+}
+
+function salvarPadroesTurma(){
+  cfgPadroesTurma.vagas     = parseInt(document.getElementById('cfg-padrao-vagas').value)||4;
+  cfgPadroesTurma.mens      = parseFloat(document.getElementById('cfg-padrao-mens').value)||180;
+  cfgPadroesTurma.cor       = document.getElementById('cfg-padrao-cor').value||'#e91e8c';
+  cfgPadroesTurma.categoria = document.getElementById('cfg-padrao-categoria').value||cfgCatTurmas[0]?.nome||'Misto';
+  salvarCacheLocal();
+  showToast('Padrões de turma salvos! ✅');
+}
+
 function renderCfgSistema(){
   const c = document.getElementById('cfg-pgto-lista'); if(!c) return;
   c.innerHTML = cfgPgtos.map((p,i)=>`
@@ -4307,7 +4373,7 @@ const CACHE_TTL   = 1000 * 60 * 60 * 24 * 7; // 7 dias
 function salvarCacheLocal(){
   try {
     const dados = { turmas, alunos, presencas, cobrancas, avisosFalta, conteudos,
-      turmaIdC, alunoIdC, presIdC, cobIdC, conteudoIdC, cfgCatTurmas };
+      turmaIdC, alunoIdC, presIdC, cobIdC, conteudoIdC, cfgCatTurmas, cfgPadroesTurma };
     // Fotos são base64 e podem ser grandes — guardar sem elas para economizar espaço
     const dadosSemFotos = { ...dados,
       alunos: alunos.map(a=>({...a, foto: a.foto&&a.foto.startsWith('http')?a.foto:''}))
@@ -4336,6 +4402,7 @@ function carregarCacheLocal(){
     cobIdC      = d.cobIdC      || 1;
     conteudoIdC = d.conteudoIdC || 4;
     if(d.cfgCatTurmas && d.cfgCatTurmas.length) cfgCatTurmas = d.cfgCatTurmas;
+    if(d.cfgPadroesTurma) cfgPadroesTurma = {...cfgPadroesTurma, ...d.cfgPadroesTurma};
     const ts_fmt = new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     console.log(`📦 Cache local carregado (${ts_fmt}) · ${alunos.length} alunos`);
     return ts_fmt; // retorna timestamp para exibir no aviso
