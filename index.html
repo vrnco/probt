@@ -2082,7 +2082,7 @@ function onFotoChange(ev){
   };
   reader.readAsDataURL(f);
 }
-function salvarAluno(){
+async function salvarAluno(){
   const nome=document.getElementById('a-nome').value.trim();
   if(!nome){alert('Informe o nome');return;}
   const nasc=document.getElementById('a-nasc').value;
@@ -2098,27 +2098,40 @@ function salvarAluno(){
   const diaVencimento=parseInt(document.getElementById('a-vencimento').value)||null;
   const turmasSel=Array.from(document.querySelectorAll('#turma-checks input:checked')).map(x=>parseInt(x.value));
   const aulasSemana=aulasSemanaNew||turmasSel.length||1;
+
+  let alunoParaSalvar;
   if(editAlunoId){
     const idx=alunos.findIndex(a=>a.id===editAlunoId);
     if(idx>=0){
       const antTurmas=alunos[idx].turmas||[];
       alunos[idx]={...alunos[idx],nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew||alunos[idx].catInicio,catAtual:catAtualNew||alunos[idx].catAtual,dataCatInicio:alunos[idx].dataCatInicio||inicio,inicio,obs,respNome,respTel,apelidos,turmas:turmasSel,aulasSemana,foto:fotoNovoDataUrl||alunos[idx].foto};
-      // sync turma.alunos
       turmas.forEach(t=>{
         const tinha=antTurmas.includes(t.id), tem=turmasSel.includes(t.id);
         if(tinha&&!tem)t.alunos=t.alunos.filter(x=>x!==editAlunoId);
         if(!tinha&&tem&&!t.alunos.includes(editAlunoId))t.alunos.push(editAlunoId);
       });
+      alunoParaSalvar=alunos[idx];
     }
   } else {
     const id=alunoIdC++;
-    alunos.push({id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}});
+    const novo={id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}};
+    alunos.push(novo);
     turmasSel.forEach(tid=>{const t=turmas.find(x=>x.id===tid);if(t&&!t.alunos.includes(id))t.alunos.push(id);});
     gerarCobrancas();
+    alunoParaSalvar=novo;
   }
   closeModal('modal-aluno');
   renderAlunos();
   if(document.getElementById('pg-dashboard').classList.contains('active'))initDashboard();
+
+  // Salvar no Supabase
+  if(alunoParaSalvar){
+    await sbSalvarAluno(alunoParaSalvar);
+    // Sync turmas.alunos
+    const turmasAfetadas=turmas.filter(t=>t.alunos.includes(alunoParaSalvar.id)||(alunoParaSalvar.turmas||[]).includes(t.id));
+    for(const t of turmasAfetadas) await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
+    salvarCacheLocal();
+  }
 }
 function verAluno(id){
   const a=alunos.find(x=>x.id===id);if(!a)return;
@@ -2254,35 +2267,53 @@ function editarTurmaAtual(){
   openModal('modal-turma');
 }
 
-function excluirTurmaAtual(){
+async function excluirTurmaAtual(){
   const t=turmas.find(x=>x.id===turmaPanelId); if(!t)return;
   if(!confirm(`Excluir a turma "${t.nome}"? Os alunos não serão removidos, apenas desassociados.`)) return;
+  const sbId = t._sbId||t.id;
   turmas=turmas.filter(x=>x.id!==turmaPanelId);
   alunos.forEach(a=>{ a.turmas=(a.turmas||[]).filter(id=>id!==turmaPanelId); });
   fecharTurmaPanel();
   initDashboard();
+  await sbDelete('turmas', sbId);
+  salvarCacheLocal();
   showToast('Turma excluída.');
 }
 
-function salvarTurma(){
-  const hora=document.getElementById('t-hora').value;
-  const nome=document.getElementById('t-nome').value.trim();
-  const vagas=parseInt(document.getElementById('t-vagas').value)||6;
-  const categoria=document.getElementById('t-categoria').value||cfgCatTurmas[0]?.nome||'Misto';
-  const cor=document.getElementById('t-cor').value||'';
-  const mens=parseFloat(document.getElementById('t-mens').value)||0;
+async function salvarTurma(){
+  const hora      = document.getElementById('t-hora').value;
+  const nome      = document.getElementById('t-nome').value.trim();
+  const vagas     = parseInt(document.getElementById('t-vagas').value)||6;
+  const categoria = document.getElementById('t-categoria').value||cfgCatTurmas[0]?.nome||'Misto';
+  const cor       = document.getElementById('t-cor').value||'';
+  const mens      = parseFloat(document.getElementById('t-mens').value)||0;
   if(!nome||!diasTurmaNew.length){alert('Preencha nome e selecione ao menos um dia');return;}
+
+  let turmaParaSalvar;
   if(editandoTurmaId){
     const idx=turmas.findIndex(t=>t.id===editandoTurmaId);
-    if(idx>=0) turmas[idx]={...turmas[idx],hora,nome,vagas,categoria,cor,mensalidade:mens,dias:[...diasTurmaNew]};
+    if(idx>=0){
+      turmas[idx]={...turmas[idx],hora,nome,vagas,categoria,cor,mensalidade:mens,dias:[...diasTurmaNew]};
+      turmaParaSalvar = turmas[idx];
+    }
   } else {
-    turmas.push({id:turmaIdC++,hora,dias:[...diasTurmaNew],nome,vagas,categoria,cor,mensalidade:mens,alunos:[]});
+    const nova={id:turmaIdC++,hora,dias:[...diasTurmaNew],nome,vagas,categoria,cor,mensalidade:mens,alunos:[]};
+    turmas.push(nova);
+    turmaParaSalvar = nova;
   }
+
   diasTurmaNew=[]; editandoTurmaId=null;
   document.querySelectorAll('#t-dias-sel .dia-btn').forEach(b=>b.classList.remove('on'));
   closeModal('modal-turma');
   initDashboard();
   if(turmaPanelId) renderTurmaPanel();
+
+  // Salvar no Supabase
+  if(turmaParaSalvar){
+    await sbSalvarTurma(turmaParaSalvar);
+    salvarCacheLocal();
+    showToast('Turma salva! ✅');
+  }
 }
 
 // ---- TURMA PANEL ----
@@ -4264,7 +4295,7 @@ document.querySelectorAll('.modal-bg').forEach(m=>{
 
 // ===================== SUPABASE — configuração =====================
 const SB_URL = 'https://lpyyxksilepemolxhcnu.supabase.co';
-const SB_KEY = 'sb_publishable_WS_LW_xztD53Xg_cCnf0BQ_bYkfq4AW';
+const SB_KEY = 'sb_publishable_m-9tHbZkCJ-XW_-UydGGGQ_2Ldjpa6X';
 
 // Headers padrão para todas as requisições
 function sbHeaders(extra={}){
@@ -4277,6 +4308,17 @@ function sbHeaders(extra={}){
   };
 }
 
+// Verifica se o token está válido (não expirado)
+function tokenValido(){
+  if(!sbSession?.access_token) return false;
+  try {
+    // JWT: segunda parte é o payload em base64
+    const payload = JSON.parse(atob(sbSession.access_token.split('.')[1]));
+    // exp é timestamp Unix em segundos
+    return payload.exp && payload.exp > (Date.now()/1000 + 30);
+  } catch(e){ return false; }
+}
+
 // GET — buscar registros
 async function sbGet(tabela, params=''){
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${params}`, { headers: sbHeaders() });
@@ -4286,26 +4328,45 @@ async function sbGet(tabela, params=''){
 
 // POST — inserir
 async function sbPost(tabela, dados){
+  if(!tokenValido()){
+    showToast('⚠️ Sessão expirada. Fazendo login novamente...');
+    const ok = await tentarRefreshSessao();
+    if(!ok){ showToast('❌ Sessão inválida. Faça login novamente.'); return null; }
+  }
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}`, {
     method:'POST', headers: sbHeaders(), body: JSON.stringify(dados)
   });
-  if(!r.ok){ console.error('sbPost error', r.status, await r.text()); return null; }
+  if(!r.ok){
+    const err = await r.text();
+    console.error('sbPost error', r.status, err);
+    showToast(`❌ Erro ao salvar (${r.status}): verifique o console`);
+    return null;
+  }
   const txt = await r.text();
   return txt ? JSON.parse(txt) : null;
 }
 
 // PATCH — atualizar
 async function sbPatch(tabela, id, dados){
+  if(!tokenValido()){
+    const ok = await tentarRefreshSessao();
+    if(!ok) return null;
+  }
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}?id=eq.${id}`, {
     method:'PATCH', headers: sbHeaders(), body: JSON.stringify(dados)
   });
-  if(!r.ok){ console.error('sbPatch error', r.status, await r.text()); return null; }
+  if(!r.ok){
+    const err = await r.text();
+    console.error('sbPatch error', r.status, err);
+    return null;
+  }
   const txt = await r.text();
   return txt ? JSON.parse(txt) : null;
 }
 
 // DELETE — remover
 async function sbDelete(tabela, id){
+  if(!tokenValido()){ await tentarRefreshSessao(); }
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}?id=eq.${id}`, {
     method:'DELETE', headers: sbHeaders()
   });
@@ -4313,7 +4374,8 @@ async function sbDelete(tabela, id){
 }
 
 // UPSERT — inserir ou atualizar
-async function sbUpsert(tabela, dados, chave='id'){
+async function sbUpsert(tabela, dados){
+  if(!tokenValido()){ await tentarRefreshSessao(); }
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}`, {
     method:'POST',
     headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=representation'}),
@@ -4322,6 +4384,30 @@ async function sbUpsert(tabela, dados, chave='id'){
   if(!r.ok){ console.error('sbUpsert error', r.status, await r.text()); return null; }
   const txt = await r.text();
   return txt ? JSON.parse(txt) : null;
+}
+
+// Tenta renovar o token usando o refresh_token
+async function tentarRefreshSessao(){
+  try {
+    const s = localStorage.getItem('bt_session');
+    if(!s) return false;
+    const d = JSON.parse(s);
+    if(!d.refresh_token) return false;
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey': SB_KEY },
+      body: JSON.stringify({ refresh_token: d.refresh_token })
+    });
+    if(!r.ok) return false;
+    const novo = await r.json();
+    sbSession = novo;
+    localStorage.setItem('bt_session', JSON.stringify({
+      access_token: novo.access_token,
+      refresh_token: novo.refresh_token,
+      email: novo.user?.email
+    }));
+    return true;
+  } catch(e){ return false; }
 }
 
 // ===================== AUTH =====================
@@ -4335,10 +4421,15 @@ async function fazerLogin(email, senha){
     body: JSON.stringify({ email, password: senha })
   });
   const d = await r.json();
-  if(!r.ok){ return { erro: d.error_description || d.message || 'Erro ao fazer login' }; }
+  if(!r.ok){ return { erro: d.error_description || d.msg || d.message || 'Email ou senha incorretos' }; }
   sbSession = d;
   usuarioAtual = d.user;
-  localStorage.setItem('bt_session', JSON.stringify({ access_token: d.access_token, email: d.user?.email }));
+  // Salva token E refresh_token para renovação automática
+  localStorage.setItem('bt_session', JSON.stringify({
+    access_token: d.access_token,
+    refresh_token: d.refresh_token,
+    email: d.user?.email
+  }));
   return { ok: true };
 }
 
@@ -4357,9 +4448,13 @@ async function fazerLogout(){
 function recuperarSessao(){
   try {
     const s = localStorage.getItem('bt_session');
-    if(s){ const d=JSON.parse(s); sbSession={access_token:d.access_token}; usuarioAtual={email:d.email}; return true; }
-  } catch(e){}
-  return false;
+    if(!s) return false;
+    const d = JSON.parse(s);
+    if(!d.access_token) return false;
+    sbSession = { access_token: d.access_token, refresh_token: d.refresh_token };
+    usuarioAtual = { email: d.email };
+    return true;
+  } catch(e){ return false; }
 }
 
 // ===================== CARREGAMENTO DOS DADOS =====================
@@ -4872,138 +4967,9 @@ async function iniciarApp(){
 }
 
 // ===================== OVERRIDE FUNÇÕES DE SALVAR =====================
-// Salva no Supabase após cada mutação relevante
+// ===================== SUPABASE SYNC (direto nas funções) =====================
+// Nada de overrides — o save já está embutido nas funções abaixo
 
-// -- Turmas --
-const _origSalvarTurma = salvarTurma;
-salvarTurma = async function(){
-  const eraEdicao = editandoTurmaId;
-  console.log('🎯 salvarTurma chamado, eraEdicao:', eraEdicao);
-  _origSalvarTurma.apply(this, arguments);
-  const t = eraEdicao
-    ? turmas.find(x=>x.id===eraEdicao)
-    : turmas[turmas.length-1];
-  console.log('🎯 turma para salvar:', t?.nome, 'id:', t?.id, '_sbId:', t?._sbId);
-  if(t){
-    await sbSalvarTurma(t);
-    showToast('Turma salva! ✅');
-  }
-  salvarCacheLocal();
-};
-const _origExcluirTurma = excluirTurmaAtual;
-excluirTurmaAtual = async function(){
-  const t = turmas.find(x=>x.id===turmaPanelId);
-  const sbId = t?._sbId||turmaPanelId;
-  _origExcluirTurma.apply(this, arguments);
-  if(sbId){
-    console.log('🗑️ Excluindo turma sbId:', sbId);
-    await sbDelete('turmas', sbId);
-  }
-};
-
-// -- Alunos --
-const _origSalvarAluno = salvarAluno;
-salvarAluno = async function(){
-  // Captura antes do _origSalvarAluno resetar editAlunoId
-  const eraEdicao = editAlunoId;
-  _origSalvarAluno.apply(this, arguments);
-  const a = eraEdicao
-    ? alunos.find(x=>x.id===eraEdicao)
-    : alunos[alunos.length-1];
-  if(a){
-    await sbSalvarAluno(a);
-    // Sync array de alunos nas turmas
-    for(const t of turmas) await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
-  }
-  salvarCacheLocal();
-};
-const _origToggleAtivo = toggleAtivo;
-toggleAtivo = async function(id){
-  _origToggleAtivo.apply(this, arguments);
-  const a=alunos.find(x=>x.id===id); if(a) await sbSalvarAluno(a);
-};
-const _origAdicionarAluno = adicionarAlunoNaTurma;
-adicionarAlunoNaTurma = async function(alunoId){
-  _origAdicionarAluno.apply(this, arguments);
-  const a=alunos.find(x=>x.id===alunoId); if(a) await sbSalvarAluno(a);
-  const t=turmas.find(x=>x.id===turmaPanelId); if(t) await sbPatch('turmas',t._sbId||t.id,{alunos:t.alunos});
-};
-const _origRemoverAluno = removerAlunoDaTurma;
-removerAlunoDaTurma = async function(alunoId, turmaId){
-  _origRemoverAluno.apply(this, arguments);
-  const a=alunos.find(x=>x.id===alunoId); if(a) await sbSalvarAluno(a);
-  const t=turmas.find(x=>x.id===turmaId); if(t) await sbPatch('turmas',t._sbId||t.id,{alunos:t.alunos});
-};
-
-// -- Presença --
-const _origSalvarPresenca = salvarPresenca;
-salvarPresenca = async function(){
-  const tid=parseInt(document.getElementById('pres-turma').value);
-  const data=document.getElementById('pres-data').value;
-  _origSalvarPresenca.apply(this, arguments);
-  const p=presencas.find(x=>x.turmaId===tid&&x.data===data);
-  if(p){ await sbSalvarPresenca(p); }
-  const alunosTurma=alunos.filter(a=>a.turmas&&a.turmas.includes(tid));
-  for(const a of alunosTurma) await sbPatch('alunos',a._sbId||a.id,{reposicoes:a.reposicoes});
-  salvarCacheLocal();
-};
-
-// -- Cobranças --
-const _origTogglePag = togglePag;
-togglePag = async function(id){
-  _origTogglePag.apply(this, arguments);
-  const c=cobrancas.find(x=>x.id===id); if(c) await sbSalvarCobranca(c);
-};
-const _origAplicarBaixas = aplicarBaixas;
-aplicarBaixas = async function(){
-  _origAplicarBaixas.apply(this, arguments);
-  // Salvar todas as cobranças que foram marcadas
-  for(const l of extratoLinhas){
-    if(l.cobranca&&l.cobranca.pago) await sbSalvarCobranca(l.cobranca);
-  }
-};
-
-// -- Avisos --
-const _origSalvarAviso = salvarAvisoFalta;
-salvarAvisoFalta = async function(){
-  const prevLen = avisosFalta.length;
-  _origSalvarAviso.apply(this, arguments);
-  const novo = avisosFalta[avisosFalta.length-1];
-  if(avisosFalta.length > prevLen && novo) await sbSalvarAviso(novo);
-};
-const _origRemoverAviso = removerAviso;
-removerAviso = async function(id){
-  _origRemoverAviso.apply(this, arguments);
-  await sbDeletarAviso(id);
-};
-
-// -- Reposições manuais --
-const _origAdjRep = adjRep;
-adjRep = async function(delta){
-  _origAdjRep.apply(this, arguments);
-  const a=alunos.find(x=>x.id===editRepAlunoId); if(a) await sbPatch('alunos',a._sbId||a.id,{reposicoes:a.reposicoes});
-};
-const _origConfirmarUsoRep = confirmarUsoRep;
-confirmarUsoRep = async function(){
-  _origConfirmarUsoRep.apply(this, arguments);
-  const a=alunos.find(x=>x.id===repAlunoId); if(a) await sbPatch('alunos',a._sbId||a.id,{reposicoes:a.reposicoes});
-};
-
-// -- Conteúdos --
-const _origSalvarConteudo = salvarConteudo;
-salvarConteudo = async function(){
-  const prevId = editandoConteudoId;
-  _origSalvarConteudo.apply(this, arguments);
-  const c = prevId ? conteudos.find(x=>x.id===prevId) : conteudos[conteudos.length-1];
-  if(c) await sbSalvarConteudo(c);
-};
-
-// -- Avaliação --
-const _origSalvarAvaliacao = salvarAvaliacao;
-salvarAvaliacao = async function(alunoId){
-  _origSalvarAvaliacao.apply(this, arguments);
-  const a=alunos.find(x=>x.id===alunoId); if(a) await sbPatch('alunos',a._sbId||a.id,{avaliacao:a.avaliacao,ultima_avaliacao:a.ultimaAvaliacao});
-};
 
 // ===================== EXPORT / IMPORT (backup local) =====================
 function exportarDados(){
@@ -5135,16 +5101,25 @@ self.addEventListener('activate', e => {
 
 // ===================== INIT =====================
 (function(){
-  // Esconde a nav imediatamente — vai aparecer só após login
   const nav = document.querySelector('.nav');
   if(nav) nav.style.display='none';
   document.querySelectorAll('.page').forEach(p=>p.style.display='none');
 
   if(recuperarSessao()){
-    iniciarApp();
+    // Se token expirou, tenta renovar antes de iniciar
+    if(!tokenValido()){
+      tentarRefreshSessao().then(ok=>{
+        if(ok){ iniciarApp(); }
+        else {
+          // Refresh falhou — volta para tela de login mas com dados públicos
+          carregarDadosPublicos().then(()=>mostrarTelaLogin());
+        }
+      });
+    } else {
+      iniciarApp();
+    }
   } else {
-    // Carrega dados mínimos para o calendário público e mostra a tela
-    carregarDadosPublicos().then(()=> mostrarTelaLogin());
+    carregarDadosPublicos().then(()=>mostrarTelaLogin());
   }
 })();
 
