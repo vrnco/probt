@@ -1246,11 +1246,37 @@ textarea{resize:vertical;min-height:60px}
     <label>Turmas associadas</label>
     <div class="turma-checks" id="turma-checks"></div>
     <!-- Responsável menor -->
-    <div id="resp-section" style="display:none">
-      <div style="background:var(--amber-bg);color:var(--amber);padding:7px 10px;border-radius:8px;font-size:12px;margin-top:10px">Menor de idade — informe o responsável</div>
-      <div class="form-row">
-        <div><label>Nome do responsável</label><input type="text" id="a-resp-nome"></div>
-        <div><label>Telefone do responsável</label><input type="tel" id="a-resp-tel"></div>
+    <div id="resp-section" style="display:none;margin-top:4px">
+      <div style="background:var(--amber-bg);border:1px solid #f0c060;border-radius:10px;padding:12px 14px;margin-top:4px">
+        <div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:10px">
+          👶 Menor de idade — dados do responsável
+        </div>
+        <div class="form-row">
+          <div style="flex:2">
+            <label>Nome completo do responsável <span style="color:var(--red)">*</span></label>
+            <input type="text" id="a-resp-nome" placeholder="Nome do pai/mãe/responsável">
+          </div>
+          <div style="flex:1">
+            <label>Parentesco</label>
+            <select id="a-resp-parentesco">
+              <option value="Mãe">Mãe</option>
+              <option value="Pai">Pai</option>
+              <option value="Avó/Avô">Avó/Avô</option>
+              <option value="Tutor(a)">Tutor(a)</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>WhatsApp do responsável <span style="color:var(--red)">*</span></label>
+            <input type="tel" id="a-resp-tel" placeholder="(18) 99999-9999">
+          </div>
+          <div>
+            <label>Email do responsável</label>
+            <input type="email" id="a-resp-email" placeholder="email@exemplo.com">
+          </div>
+        </div>
       </div>
     </div>
     <!-- Apelido pag -->
@@ -2028,6 +2054,8 @@ function editarAluno(id){
   document.getElementById('a-obs').value=a.obs||'';
   document.getElementById('a-resp-nome').value=a.respNome||'';
   document.getElementById('a-resp-tel').value=a.respTel||'';
+  const rpe=document.getElementById('a-resp-email'); if(rpe)rpe.value=a.respEmail||'';
+  const rpp=document.getElementById('a-resp-parentesco'); if(rpp)rpp.value=a.respParentesco||'Mãe';
   document.getElementById('a-apelidos').value=(a.apelidos||[]).join(', ');
   document.getElementById('a-idade').value=a.nasc?calcIdade(a.nasc)+' anos':'—';
   document.getElementById('a-camisa').value=a.camisa||'';
@@ -2047,7 +2075,7 @@ function editarAluno(id){
   openModal('modal-aluno');
 }
 function limparFormAluno(){
-  ['a-nome','a-tel','a-obs','a-resp-nome','a-resp-tel','a-apelidos','a-valor'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+  ['a-nome','a-tel','a-obs','a-resp-nome','a-resp-tel','a-resp-email','a-apelidos','a-valor'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
   document.getElementById('a-nasc').value='';document.getElementById('a-inicio').value='';
   document.getElementById('a-idade').value='';
   document.getElementById('a-camisa').value='';
@@ -2093,6 +2121,8 @@ async function salvarAluno(){
   const obs=document.getElementById('a-obs').value.trim();
   const respNome=document.getElementById('a-resp-nome').value.trim();
   const respTel=document.getElementById('a-resp-tel').value.trim();
+  const respEmail=(document.getElementById('a-resp-email')?.value||'').trim();
+  const respParentesco=document.getElementById('a-resp-parentesco')?.value||'';
   const apelidos=document.getElementById('a-apelidos').value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
   const camisa=document.getElementById('a-camisa').value;
   const diaVencimento=parseInt(document.getElementById('a-vencimento').value)||null;
@@ -2104,7 +2134,7 @@ async function salvarAluno(){
     const idx=alunos.findIndex(a=>a.id===editAlunoId);
     if(idx>=0){
       const antTurmas=alunos[idx].turmas||[];
-      alunos[idx]={...alunos[idx],nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew||alunos[idx].catInicio,catAtual:catAtualNew||alunos[idx].catAtual,dataCatInicio:alunos[idx].dataCatInicio||inicio,inicio,obs,respNome,respTel,apelidos,turmas:turmasSel,aulasSemana,foto:fotoNovoDataUrl||alunos[idx].foto};
+      alunos[idx]={...alunos[idx],nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew||alunos[idx].catInicio,catAtual:catAtualNew||alunos[idx].catAtual,dataCatInicio:alunos[idx].dataCatInicio||inicio,inicio,obs,respNome,respTel,respEmail,respParentesco,apelidos,turmas:turmasSel,aulasSemana,foto:fotoNovoDataUrl||alunos[idx].foto};
       turmas.forEach(t=>{
         const tinha=antTurmas.includes(t.id), tem=turmasSel.includes(t.id);
         if(tinha&&!tem)t.alunos=t.alunos.filter(x=>x!==editAlunoId);
@@ -2114,7 +2144,7 @@ async function salvarAluno(){
     }
   } else {
     const id=alunoIdC++;
-    const novo={id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}};
+    const novo={id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,respEmail,respParentesco,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}};
     alunos.push(novo);
     turmasSel.forEach(tid=>{const t=turmas.find(x=>x.id===tid);if(t&&!t.alunos.includes(id))t.alunos.push(id);});
     gerarCobrancas();
@@ -2167,7 +2197,8 @@ function verAluno(id){
           <tr><td style="color:var(--muted);padding:3px 0">Início</td><td>${fmtD(a.inicio)}</td></tr>
           <tr><td style="color:var(--muted);padding:3px 0">Status</td><td><span class="badge ${a.ativo?'b-green':'b-gray'}">${a.ativo?'Ativo':'Inativo'}</span></td></tr>
           <tr><td style="color:var(--muted);padding:3px 0">Reposições</td><td><span class="badge ${saldo>0?'b-blue':saldo<0?'b-red':'b-gray'}">${saldo>0?'+':''}${saldo}</span></td></tr>
-          ${a.respNome?`<tr><td style="color:var(--muted);padding:3px 0">Responsável</td><td>${a.respNome} · ${a.respTel||'-'}</td></tr>`:''}
+          ${a.respNome?`<tr><td style="color:var(--muted);padding:3px 0">Responsável</td><td>${a.respParentesco?`<span class="badge b-amber" style="font-size:10px">${a.respParentesco}</span> `:''}${a.respNome}${a.respTel?' · '+a.respTel:''}</td></tr>`:''}
+          ${a.respEmail?`<tr><td style="color:var(--muted);padding:3px 0">Email resp.</td><td>${a.respEmail}</td></tr>`:''}
         </table>
       </div>
     </div>
@@ -4615,7 +4646,7 @@ window.addEventListener('offline', ()=>{
 
 // ===================== MAPEADORES =====================
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
-function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||200), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
+function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||200), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
 function mapPresenca(r){ return { id:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
 function mapCobranca(r){ return { id:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'' }; }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
@@ -4642,7 +4673,8 @@ async function sbSalvarTurma(t){
 async function sbSalvarAluno(a){
   const payload = {
     nome:a.nome, nasc:a.nasc, tel:a.tel, turmas:a.turmas, inicio:a.inicio, ativo:a.ativo,
-    foto:a.foto||null, resp_nome:a.respNome||null, resp_tel:a.respTel||null, obs:a.obs||null,
+    foto:a.foto||null, resp_nome:a.respNome||null, resp_tel:a.respTel||null,
+    resp_email:a.respEmail||null, resp_parentesco:a.respParentesco||null, obs:a.obs||null,
     aulas_semana:a.aulasSemana||1, camisa:a.camisa||null, cat_inicio:a.catInicio||null,
     cat_atual:a.catAtual||null, data_cat_inicio:a.dataCatInicio||null,
     dia_vencimento:a.diaVencimento||null, valor:a.valor||200, pgto:a.pgto||'pix',
