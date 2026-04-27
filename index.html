@@ -494,15 +494,16 @@ textarea{resize:vertical;min-height:60px}
   <div id="ft-cobrancas">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <select id="filtro-mes" onchange="renderCobrancas()" style="width:auto">
-        <option value="2025-04">Abril 2025</option><option value="2025-05">Maio 2025</option><option value="2025-06">Junho 2025</option>
+        <option value="">Carregando...</option>
       </select>
       <button class="btn btn-sm" onclick="gerarExtrato()">Gerar extrato</button>
       <button class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366" onclick="abrirDispararWA()">💬 Cobrar por WhatsApp</button>
     </div>
-    <div class="g3" style="margin-bottom:12px">
-      <div class="metric"><div class="metric-label">Total</div><div class="metric-value" id="fin-total">R$ 0</div></div>
+    <div class="g4" style="margin-bottom:12px">
+      <div class="metric"><div class="metric-label">Total previsto</div><div class="metric-value" id="fin-total">R$ 0</div></div>
       <div class="metric"><div class="metric-label">Recebido</div><div class="metric-value" id="fin-rec" style="color:var(--green)">R$ 0</div></div>
       <div class="metric"><div class="metric-label">Pendente</div><div class="metric-value" id="fin-pend" style="color:var(--red)">R$ 0</div></div>
+      <div class="metric"><div class="metric-label">Tx. recebimento</div><div class="metric-value" id="fin-taxa" style="color:var(--accent)">0%</div></div>
     </div>
     <div class="card" style="padding:10px 14px"><div id="cobrancas-lista"></div></div>
   </div>
@@ -941,13 +942,19 @@ textarea{resize:vertical;min-height:60px}
     <div class="card" style="padding:16px">
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">Dados do sistema</div>
       <div id="cfg-storage-info" style="font-size:13px;color:var(--muted);margin-bottom:12px">Calculando...</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-sm" onclick="exportarDados()">📥 Exportar backup (JSON)</button>
         <button class="btn btn-sm" onclick="importarBackup()">📤 Restaurar backup</button>
         <button class="btn btn-danger btn-sm" onclick="limparDados()">🗑 Apagar todos os dados</button>
       </div>
-      <div style="margin-top:12px;background:var(--accent-light);border-radius:8px;padding:10px 12px;font-size:12px;color:#0c4480">
-        💾 Os dados são salvos automaticamente no seu dispositivo (localStorage). Para não perder, faça backups regulares pelo botão acima.
+      <!-- Diagnóstico Supabase -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔍 Diagnóstico da conexão</div>
+        <div id="cfg-diag-resultado" style="font-size:12px;color:var(--muted);margin-bottom:8px">Clique em "Testar" para verificar a conexão com o Supabase.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="testarConexaoSupabase()">🔌 Testar conexão</button>
+          <button class="btn btn-sm btn-primary" onclick="testarSalvarTurma()">💾 Testar salvar turma</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2545,7 +2552,45 @@ function irParaPresencaTurma(){
 
 
 // ===================== FINANCEIRO =====================
-function initFin(){ renderCobrancas(); }
+function initFin(){
+  // Gera opções de meses dinamicamente: 3 meses anteriores + atual + 2 próximos
+  const sel = document.getElementById('filtro-mes');
+  const now = new Date();
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const opts = [];
+  for(let i = -3; i <= 2; i++){
+    const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = `${meses[d.getMonth()]} ${d.getFullYear()}`;
+    opts.push(`<option value="${val}">${label}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+  // Seleciona o mês atual
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  sel.value = mesAtual;
+  // Garante cobranças do mês atual existem
+  gerarCobrancasMesAtual();
+  renderCobrancas();
+}
+
+// Gera cobranças para o mês atual se ainda não existirem
+function gerarCobrancasMesAtual(){
+  const now = new Date();
+  const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  alunos.filter(a=>a.ativo).forEach(a=>{
+    const jaExiste = cobrancas.find(c=>c.alunoId===a.id && c.mes===mes);
+    if(!jaExiste){
+      const id = cobIdC++;
+      cobrancas.push({
+        id, alunoId:a.id, alunoNome:a.nome, mes,
+        valor: a.valor||200, pago:false, dataPag:null,
+        pgto: a.pgto||'pix',
+        turma: (a.turmas||[]).map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.nome:''}).filter(Boolean).join(', ')
+      });
+    }
+  });
+}
 function renderCobrancas(){
   const mes=document.getElementById('filtro-mes').value;
   const lista=cobrancas.filter(p=>p.mes===mes);
@@ -2554,6 +2599,9 @@ function renderCobrancas(){
   document.getElementById('fin-total').textContent=fmtR(total);
   document.getElementById('fin-rec').textContent=fmtR(rec);
   document.getElementById('fin-pend').textContent=fmtR(total-rec);
+  const taxa = total>0 ? Math.round(rec/total*100) : 0;
+  const taxaEl = document.getElementById('fin-taxa');
+  if(taxaEl){ taxaEl.textContent=taxa+'%'; taxaEl.style.color=taxa>=80?'var(--green)':taxa>=50?'var(--amber)':'var(--red)'; }
   const c=document.getElementById('cobrancas-lista');
   if(!lista.length){c.innerHTML='<div class="empty">Sem cobranças</div>';return;}
   const alunosFiltro=alunos.filter(a=>lista.find(l=>l.alunoId===a.id));
@@ -5003,7 +5051,89 @@ async function iniciarApp(){
 // Nada de overrides — o save já está embutido nas funções abaixo
 
 
-// ===================== EXPORT / IMPORT (backup local) =====================
+// ===================== DIAGNÓSTICO SUPABASE =====================
+async function testarConexaoSupabase(){
+  const el = document.getElementById('cfg-diag-resultado');
+  el.innerHTML = '⏳ Testando conexão...';
+  const linhas = [];
+
+  // 1. Token
+  linhas.push(`🔑 Token: ${sbSession?.access_token ? (tokenValido()?'✅ Válido':'⚠️ Expirado') : '❌ Ausente'}`);
+  linhas.push(`👤 Usuário: ${usuarioAtual?.email||'não identificado'}`);
+
+  // 2. Teste GET turmas
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/turmas?select=id,nome&limit=3`, { headers: sbHeaders() });
+    const txt = await r.text();
+    if(r.ok){
+      const dados = JSON.parse(txt);
+      linhas.push(`📋 GET turmas: ✅ OK — ${dados.length} turma(s) no banco`);
+    } else {
+      linhas.push(`📋 GET turmas: ❌ Erro ${r.status} — ${txt.substring(0,120)}`);
+    }
+  } catch(e){ linhas.push(`📋 GET turmas: ❌ Falha de rede — ${e.message}`); }
+
+  // 3. Teste GET alunos
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/alunos?select=id,nome&limit=3`, { headers: sbHeaders() });
+    const txt = await r.text();
+    if(r.ok){
+      const dados = JSON.parse(txt);
+      linhas.push(`👥 GET alunos: ✅ OK — ${dados.length} aluno(s) no banco`);
+    } else {
+      linhas.push(`👥 GET alunos: ❌ Erro ${r.status} — ${txt.substring(0,120)}`);
+    }
+  } catch(e){ linhas.push(`👥 GET alunos: ❌ Falha de rede — ${e.message}`); }
+
+  el.innerHTML = linhas.map(l=>`<div style="padding:3px 0;font-family:monospace">${l}</div>`).join('');
+}
+
+async function testarSalvarTurma(){
+  const el = document.getElementById('cfg-diag-resultado');
+  el.innerHTML = '⏳ Testando POST na tabela turmas...';
+
+  if(!tokenValido()){
+    el.innerHTML = '❌ Token expirado ou ausente. Faça logout e login novamente.';
+    return;
+  }
+
+  // Tenta inserir uma turma de teste
+  const payload = {
+    hora: '00:00', dias: ['seg'], nome: '_TESTE_DIAGNOSTICO_',
+    vagas: 1, categoria: 'Misto', cor: null, mensalidade: 0, alunos: []
+  };
+
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/turmas`, {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify(payload)
+    });
+    const txt = await r.text();
+
+    if(r.ok){
+      const dados = JSON.parse(txt);
+      const novoId = dados[0]?.id;
+      el.innerHTML = `✅ POST funcionou! ID criado: ${novoId}<br>`;
+      // Apaga a turma de teste
+      if(novoId){
+        await fetch(`${SB_URL}/rest/v1/turmas?id=eq.${novoId}`, { method:'DELETE', headers: sbHeaders() });
+        el.innerHTML += `🗑️ Turma de teste removida. <br><br><strong>✅ Conexão com Supabase OK! O problema pode ser outro.</strong>`;
+      }
+    } else {
+      el.innerHTML = `❌ POST falhou — Status ${r.status}<br><pre style="font-size:10px;overflow:auto;max-height:120px">${txt}</pre>
+        <br><strong>Causa provável:</strong><br>
+        ${r.status===401?'🔑 Token inválido — faça logout e login novamente':''}
+        ${r.status===403?'🔒 Sem permissão — verifique as políticas RLS no Supabase':''}
+        ${r.status===400?'📋 Dados inválidos — faltam colunas ou tipos incorretos':''}
+        ${r.status===404?'🗄️ Tabela não encontrada — rode o SQL de setup':''}`;
+    }
+  } catch(e){
+    el.innerHTML = `❌ Falha de rede: ${e.message}<br>Verifique sua conexão com a internet.`;
+  }
+}
+
+
 function exportarDados(){
   const dados = { turmas, alunos, presencas, cobrancas, avisosFalta, conteudos, _v:1, _saved:new Date().toISOString() };
   const blob = new Blob([JSON.stringify(dados,null,2)], {type:'application/json'});
