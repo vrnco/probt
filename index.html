@@ -1916,11 +1916,18 @@ function salvarPresenca(){
   if(prev)prev.registros=registros;
   else presencas.push({id:presIdC++,turmaId:tid,data,registros});
   delete presTemp[key];
-  showToast('Presença salva!');
+  showToast('Presença salva! Gravando...');
   renderPresCards();
   renderWeekGrid();
   renderVagasPanel();
   renderAulasHoje();
+  // Salvar presença no Supabase
+  const pObj = presencas.find(p=>p.turmaId===tid&&p.data===data);
+  if(pObj) sbSalvarPresenca(pObj).then(()=>{
+    // Salvar saldos de reposição dos alunos afetados
+    const afetados=registros.map(r=>alunos.find(a=>a.id===r.alunoId)).filter(Boolean);
+    return Promise.all(afetados.map(a=>sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes})));
+  }).then(()=>{ salvarCacheLocal(); showToast('✅ Presença gravada no banco!'); });
 }
 
 function renderHistorico(){
@@ -2011,7 +2018,22 @@ function refreshEditRep(){
       <div><div style="font-size:12px;font-weight:600">${fmtD(l.data)}</div><div style="font-size:12px;color:var(--muted)">${l.obs}</div></div>
     </div>`).join(''):'<div style="font-size:13px;color:var(--muted)">Sem histórico</div>';
 }
-function adjRep(delta){
+async function confirmarUsoRep(){
+  const a=alunos.find(x=>x.id===repAlunoId);
+  if(!a||!a.reposicoes||a.reposicoes.saldo<=0){alert('Sem saldo!');return;}
+  const tid=parseInt(document.getElementById('ur-turma').value);
+  const data=document.getElementById('ur-data').value;
+  const obs=document.getElementById('ur-obs').value||'Reposição realizada';
+  const tRep=turmas.find(x=>x.id===tid);
+  a.reposicoes.saldo-=1;
+  a.reposicoes.log.push({tipo:'uso',data,obs:obs+(tRep?' — '+tRep.nome:'')});
+  closeModal('modal-usar-rep');
+  renderReposicoes();
+  await sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes});
+  salvarCacheLocal();
+}
+
+async function adjRep(delta){
   const a=alunos.find(x=>x.id===editRepAlunoId); if(!a)return;
   const just=document.getElementById('er-just').value.trim();
   if(!just){alert('Informe a justificativa!');return;}
@@ -2020,6 +2042,8 @@ function adjRep(delta){
   a.reposicoes.log.push({tipo:delta>0?'credito':'uso',data:today(),obs:'[Ajuste manual] '+just});
   document.getElementById('er-just').value='';
   refreshEditRep();
+  await sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes});
+  salvarCacheLocal();
 }
 
 // ===================== ALUNOS =====================
@@ -2072,8 +2096,8 @@ function alunoRowHtml(a){
   </div>`;
 }
 
-function toggleAtivo(id){
-  const a=alunos.find(x=>x.id===id);if(!a)return;
+async function toggleAtivo(id){
+  const a=alunos.find(x=>x.id===id); if(!a)return;
   if(a.ativo){
     const obs=prompt('Motivo para desativar (opcional):','');
     a.ativo=false;
@@ -2084,6 +2108,8 @@ function toggleAtivo(id){
     a.historico.push({tipo:'retornou',data:today(),obs:obs||''});
   }
   renderAlunos();
+  await sbSalvarAluno(a);
+  salvarCacheLocal();
 }
 
 function showIdade(){
@@ -2465,7 +2491,7 @@ function renderTurmaPanel(){
     );
 }
 
-function removerAlunoDaTurma(alunoId, turmaId){
+async function removerAlunoDaTurma(alunoId, turmaId){
   const a=alunos.find(x=>x.id===alunoId);
   const t=turmas.find(x=>x.id===turmaId);
   if(!a||!t)return;
@@ -2475,6 +2501,9 @@ function removerAlunoDaTurma(alunoId, turmaId){
   renderTurmaPanel();
   initDashboard();
   showToast(a.nome.split(' ')[0]+' removido da turma.');
+  await sbSalvarAluno(a);
+  await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
+  salvarCacheLocal();
 }
 
 function abrirAdicionarAluno(){
@@ -2507,7 +2536,7 @@ function renderListaAddAluno(){
     :'<div class="empty">Nenhum aluno disponível</div>';
 }
 
-function adicionarAlunoNaTurma(alunoId){
+async function adicionarAlunoNaTurma(alunoId){
   const t=turmas.find(x=>x.id===turmaPanelId); if(!t)return;
   const a=alunos.find(x=>x.id===alunoId); if(!a)return;
   const ativos=t.alunos.filter(id=>alunos.find(x=>x.id===id&&x.ativo)).length;
@@ -2521,6 +2550,9 @@ function adicionarAlunoNaTurma(alunoId){
   renderTurmaPanel();
   initDashboard();
   showToast(a.nome.split(' ')[0]+' adicionado à turma!');
+  await sbSalvarAluno(a);
+  await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
+  salvarCacheLocal();
 }
 
 // ---- Aba Reposição no painel ----
@@ -2684,10 +2716,12 @@ function renderCobrancas(){
     </div>`;
   }).join('');
 }
-function togglePag(id){
-  const p=cobrancas.find(x=>x.id===id);if(!p)return;
-  p.pago=!p.pago;p.dataPag=p.pago?today():null;
+async function togglePag(id){
+  const p=cobrancas.find(x=>x.id===id); if(!p)return;
+  p.pago=!p.pago; p.dataPag=p.pago?today():null;
   renderCobrancas();
+  await sbSalvarCobranca(p);
+  salvarCacheLocal();
 }
 function gerarExtrato(){
   const mes=document.getElementById('filtro-mes').value;
@@ -3201,26 +3235,30 @@ function confirmarMatch(alunoId){
   showToast(`✅ Vinculado a ${a.nome.split(' ')[0]}!`);
 }
 
-function aplicarBaixas(){
+async function aplicarBaixas(){
   let count=0;
+  const cobParaSalvar=[];
   extratoLinhas.forEach(l=>{
     const cb=document.getElementById('extc-'+l.id);
     if(cb&&cb.checked){
-      if(l.splitAlunos && l.splitAlunos.length){
-        // Split: dar baixa em todas as cobranças do split
+      if(l.splitAlunos&&l.splitAlunos.length){
         l.splitAlunos.forEach(s=>{
           const cob=cobrancas.find(c=>c.id===s.cobId);
-          if(cob&&!cob.pago){cob.pago=true;cob.dataPag=today();count++;}
+          if(cob&&!cob.pago){cob.pago=true;cob.dataPag=today();count++;cobParaSalvar.push(cob);}
         });
       } else if(l.cobranca&&!l.cobranca.pago){
-        l.cobranca.pago=true;l.cobranca.dataPag=today();count++;
+        l.cobranca.pago=true;l.cobranca.dataPag=today();count++;cobParaSalvar.push(l.cobranca);
       }
     }
   });
-  showToast(count+' baixa(s) aplicada(s)!');
   renderCobrancas();
   document.getElementById('extrato-result').style.display='none';
   const inp=document.getElementById('extrato-input');if(inp)inp.value='';
+  showToast(count+' baixa(s) aplicada(s)! Salvando...');
+  // Salva todas no Supabase em paralelo
+  await Promise.all(cobParaSalvar.map(c=>sbSalvarCobranca(c)));
+  salvarCacheLocal();
+  if(count>0) showToast('✅ '+count+' baixa(s) gravada(s) no banco!');
 }
 
 // ---- LEGACY alias ----
@@ -4925,8 +4963,8 @@ window.addEventListener('offline', ()=>{
 // ===================== MAPEADORES =====================
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
 function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||200), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
-function mapPresenca(r){ return { id:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
-function mapCobranca(r){ return { id:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'' }; }
+function mapPresenca(r){ return { id:r.id, _sbId:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
+function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'' }; }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
 function mapConteudo(r){ return { id:r.id, titulo:r.titulo, categoria:r.categoria||'golpe', golpe:r.golpe||'', nivel:r.nivel||'todos', duracao:r.duracao||'', objetivo:r.objetivo||'', descricao:r.descricao||'', dicas:r.dicas||'', tags:r.tags||[], midias:r.midias||[], criado:r.criado||r.created_at?.slice(0,10)||'' }; }
 
@@ -4972,9 +5010,23 @@ async function sbSalvarPresenca(p){
   await sbUpsert('presencas', payload);
 }
 async function sbSalvarCobranca(c){
-  const payload = { aluno_id:c.alunoId, aluno_nome:c.alunoNome, mes:c.mes, valor:c.valor, pago:c.pago, data_pag:c.dataPag||null, pgto:c.pgto||'pix', turma:c.turma||'' };
-  if(c.id){ await sbPatch('cobrancas', c.id, payload); }
-  else { const r=await sbPost('cobrancas', payload); if(r&&r[0]) c.id=r[0].id; }
+  const payload = {
+    aluno_id:c.alunoId, aluno_nome:c.alunoNome, mes:c.mes,
+    valor:c.valor, pago:c.pago, data_pag:c.dataPag||null,
+    pgto:c.pgto||'pix', turma:c.turma||''
+  };
+  if(c._sbId){
+    // Tem ID real do Supabase — atualiza
+    await sbPatch('cobrancas', c._sbId, payload);
+  } else if(c.id && typeof c.id === 'number' && c.id > 10000){
+    // ID grande provavelmente veio do Supabase (serial auto-increment)
+    c._sbId = c.id;
+    await sbPatch('cobrancas', c._sbId, payload);
+  } else {
+    // Não existe no banco — insere
+    const r = await sbPost('cobrancas', payload);
+    if(r&&r[0]){ c._sbId=r[0].id; c.id=r[0].id; }
+  }
 }
 async function sbSalvarAviso(av){
   const payload = { aluno_id:av.alunoId, turma_id:av.turmaId, data:av.data, obs:av.obs||null, gerar_credito:av.gerarCredito, registrado_em:av.registradoEm||today() };
