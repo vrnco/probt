@@ -1366,6 +1366,50 @@ textarea{resize:vertical;min-height:60px}
 </div>
 
 <!-- Modal Match Pagamento -->
+<!-- Modal Registrar Msg Cobrança Enviada -->
+<div id="modal-msg-enviada" class="modal-bg">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">📩 Registrar cobrança enviada</div>
+    <button class="modal-close" onclick="closeModal('modal-msg-enviada')">×</button>
+    <div id="msg-enviada-info" style="font-size:13px;color:var(--muted);margin-bottom:12px"></div>
+    <label>Canal de envio</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="msg-via-btns">
+      <button class="dia-btn on" onclick="setMsgVia(this,'WhatsApp')">💬 WhatsApp</button>
+      <button class="dia-btn" onclick="setMsgVia(this,'Ligação')">📞 Ligação</button>
+      <button class="dia-btn" onclick="setMsgVia(this,'Email')">✉️ Email</button>
+      <button class="dia-btn" onclick="setMsgVia(this,'Pessoalmente')">🗣️ Pessoalmente</button>
+    </div>
+    <label>Data do envio</label>
+    <input type="date" id="msg-enviada-data">
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeModal('modal-msg-enviada')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="salvarMsgEnviada()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirmar Pagamento -->
+<div id="modal-confirmar-pag" class="modal-bg">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">✅ Confirmar pagamento</div>
+    <button class="modal-close" onclick="closeModal('modal-confirmar-pag')">×</button>
+    <div id="cpag-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
+    <label>Forma de pagamento</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="cpag-pgto-btns">
+      <button class="dia-btn on" onclick="setCpagPgto(this,'pix')">💠 PIX</button>
+      <button class="dia-btn" onclick="setCpagPgto(this,'cartao')">💳 Cartão</button>
+      <button class="dia-btn" onclick="setCpagPgto(this,'dinheiro')">💵 Dinheiro</button>
+      <button class="dia-btn" onclick="setCpagPgto(this,'boleto')">🔖 Boleto</button>
+    </div>
+    <label>Data do pagamento</label>
+    <input type="date" id="cpag-data">
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeModal('modal-confirmar-pag')">Cancelar</button>
+      <button class="btn btn-success btn-sm" onclick="confirmarPagamento()">✅ Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-match" class="modal-bg">
   <div class="modal" style="max-width:520px">
     <div class="modal-title">Identificar pagamento</div>
@@ -2698,6 +2742,9 @@ function renderCobrancas(){
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600">${p.alunoNome}</div>
         <div style="font-size:11px;color:var(--muted)">${p.turma} · ${pgtoLabel(p.pgto)}</div>
+        ${p.msgEnviadaEm
+          ?`<div style="font-size:10px;color:var(--green);margin-top:2px">📩 Cobrança enviada ${fmtD(p.msgEnviadaEm)}${p.msgEnviadaVia?' · '+p.msgEnviadaVia:''} <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px" onclick="event.stopPropagation();limparMsgEnviada(${p.id})">×</button></div>`
+          :`${!p.pago?`<button class="btn btn-xs" style="margin-top:3px;font-size:10px;color:var(--muted)" onclick="registrarMsgEnviada(${p.id})">📩 Marcar cobrança enviada</button>`:''}`}
       </div>
       <div style="text-align:right;min-width:70px">
         <div style="font-size:13px;font-weight:700">${fmtR(p.valor)}</div>
@@ -2716,12 +2763,62 @@ function renderCobrancas(){
     </div>`;
   }).join('');
 }
-async function togglePag(id){
-  const p=cobrancas.find(x=>x.id===id); if(!p)return;
-  p.pago=!p.pago; p.dataPag=p.pago?today():null;
+let cpagId = null;
+let cpagPgto = 'pix';
+let cpagCallback = null; // função a chamar após confirmar (ex: renderAtraso, renderCobrancas)
+
+function abrirConfirmarPag(cobId, callback){
+  const p = cobrancas.find(x=>x.id===cobId); if(!p)return;
+  const a = alunos.find(x=>x.id===p.alunoId);
+  cpagId = cobId;
+  cpagPgto = p.pgto||'pix';
+  cpagCallback = callback||null;
+  document.getElementById('cpag-info').innerHTML=`
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">${p.alunoNome}</div>
+    <div style="font-size:13px;color:var(--muted)">${fmtR(p.valor)} · ${mesNome(p.mes)}</div>`;
+  document.getElementById('cpag-data').value = today();
+  // Marca forma padrão do aluno
+  document.querySelectorAll('#cpag-pgto-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  const mapa = {pix:0,cartao:1,dinheiro:2,boleto:3};
+  const btns = document.querySelectorAll('#cpag-pgto-btns .dia-btn');
+  const idx = mapa[cpagPgto]??0;
+  if(btns[idx]) btns[idx].classList.add('on');
+  openModal('modal-confirmar-pag');
+}
+
+function setCpagPgto(btn, pgto){
+  cpagPgto = pgto;
+  document.querySelectorAll('#cpag-pgto-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+async function confirmarPagamento(){
+  const p = cobrancas.find(x=>x.id===cpagId); if(!p)return;
+  const data = document.getElementById('cpag-data').value || today();
+  p.pago = true;
+  p.dataPag = data;
+  p.pgto = cpagPgto;
+  closeModal('modal-confirmar-pag');
   renderCobrancas();
+  if(cpagCallback) cpagCallback();
   await sbSalvarCobranca(p);
   salvarCacheLocal();
+  showToast('✅ Pagamento confirmado!');
+}
+
+async function togglePag(id){
+  // Para desfazer (já pago → pendente): não precisa de modal
+  const p = cobrancas.find(x=>x.id===id); if(!p)return;
+  if(p.pago){
+    if(!confirm('Desfazer este pagamento?')) return;
+    p.pago = false; p.dataPag = null;
+    renderCobrancas();
+    await sbSalvarCobranca(p);
+    salvarCacheLocal();
+  } else {
+    // Abrir modal para confirmar com forma + data
+    abrirConfirmarPag(id, ()=>renderCobrancas());
+  }
 }
 function gerarExtrato(){
   const mes=document.getElementById('filtro-mes').value;
@@ -4126,7 +4223,7 @@ function renderAtraso(){
               💬 Cobrar
             </a>`
           :`<span style="font-size:11px;color:var(--muted)">Sem tel.</span>`}
-        ${cob?`<button class="btn btn-xs btn-success" onclick="togglePag(${cob.id});renderAtraso()">✓ Marcar pago</button>`:''}
+        ${cob?`<button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${cob.id},()=>{renderAtraso();renderCobrancas();})">✓ Marcar pago</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -4336,6 +4433,48 @@ function montarMsgAnivWA(aluno, dia, mes, idade){
   const nome = aluno.nome.split(' ')[0];
   const t = (aluno.turmas||[]).map(tid=>{const x=turmas.find(t=>t.id===tid);return x?x.nome:''}).filter(Boolean).join(', ');
   return `🎂 Parabéns, ${nome}! 🎉\n\nHoje é um dia especial — seu aniversário! 🥳\n\nQue este novo ano de vida seja repleto de saúde, alegrias e muito beach tennis! 🎾\n\nDesejo tudo de melhor pra você!\nAté a próxima aula! 😊`;
+}
+
+// ===================== MSG COBRANÇA ENVIADA =====================
+let msgEnviadaCobId = null;
+let msgEnviadaViaAtual = 'WhatsApp';
+
+function registrarMsgEnviada(cobId){
+  const p = cobrancas.find(x=>x.id===cobId); if(!p)return;
+  msgEnviadaCobId = cobId;
+  msgEnviadaViaAtual = 'WhatsApp';
+  document.getElementById('msg-enviada-info').textContent =
+    `${p.alunoNome} · ${fmtR(p.valor)} · ${mesNome(p.mes)}`;
+  document.getElementById('msg-enviada-data').value = today();
+  document.querySelectorAll('#msg-via-btns .dia-btn').forEach((b,i)=>b.classList.toggle('on',i===0));
+  openModal('modal-msg-enviada');
+}
+
+function setMsgVia(btn, via){
+  msgEnviadaViaAtual = via;
+  document.querySelectorAll('#msg-via-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+async function salvarMsgEnviada(){
+  const p = cobrancas.find(x=>x.id===msgEnviadaCobId); if(!p)return;
+  const data = document.getElementById('msg-enviada-data').value||today();
+  p.msgEnviadaEm  = data;
+  p.msgEnviadaVia = msgEnviadaViaAtual;
+  closeModal('modal-msg-enviada');
+  renderCobrancas();
+  await sbSalvarCobranca(p);
+  salvarCacheLocal();
+  showToast('📩 Cobrança registrada como enviada!');
+}
+
+async function limparMsgEnviada(cobId){
+  const p = cobrancas.find(x=>x.id===cobId); if(!p)return;
+  p.msgEnviadaEm  = null;
+  p.msgEnviadaVia = null;
+  renderCobrancas();
+  await sbSalvarCobranca(p);
+  salvarCacheLocal();
 }
 
 // ===================== GRÁFICOS =====================
@@ -4964,7 +5103,7 @@ window.addEventListener('offline', ()=>{
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
 function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||200), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
 function mapPresenca(r){ return { id:r.id, _sbId:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
-function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'' }; }
+function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'', msgEnviadaEm:r.msg_enviada_em||null, msgEnviadaVia:r.msg_enviada_via||null }; }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
 function mapConteudo(r){ return { id:r.id, titulo:r.titulo, categoria:r.categoria||'golpe', golpe:r.golpe||'', nivel:r.nivel||'todos', duracao:r.duracao||'', objetivo:r.objetivo||'', descricao:r.descricao||'', dicas:r.dicas||'', tags:r.tags||[], midias:r.midias||[], criado:r.criado||r.created_at?.slice(0,10)||'' }; }
 
@@ -5013,7 +5152,9 @@ async function sbSalvarCobranca(c){
   const payload = {
     aluno_id:c.alunoId, aluno_nome:c.alunoNome, mes:c.mes,
     valor:c.valor, pago:c.pago, data_pag:c.dataPag||null,
-    pgto:c.pgto||'pix', turma:c.turma||''
+    pgto:c.pgto||'pix', turma:c.turma||'',
+    msg_enviada_em:c.msgEnviadaEm||null,
+    msg_enviada_via:c.msgEnviadaVia||null
   };
   if(c._sbId){
     // Tem ID real do Supabase — atualiza
