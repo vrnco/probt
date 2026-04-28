@@ -1207,6 +1207,27 @@ textarea{resize:vertical;min-height:60px}
         </select>
       </div>
     </div>
+
+    <!-- Toggle patrocinado -->
+    <div style="display:flex;align-items:center;gap:10px;background:var(--amber-bg);border:1px solid #f0c060;border-radius:10px;padding:10px 14px;margin-bottom:10px;cursor:pointer" onclick="togglePatrocinado()">
+      <div id="patrocinado-icon" style="font-size:20px">🤝</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--amber)">Aluno patrocinado / isento de pagamento</div>
+        <div style="font-size:11px;color:var(--muted)" id="patrocinado-sub">Clique para ativar — não gera cobranças mensais</div>
+      </div>
+      <div id="patrocinado-toggle" style="width:40px;height:22px;border-radius:11px;background:var(--border);transition:.2s;position:relative;flex-shrink:0">
+        <div id="patrocinado-knob" style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)"></div>
+      </div>
+    </div>
+
+    <!-- Campos de patrocínio (visível quando ativo) -->
+    <div id="patrocinado-fields" style="display:none;background:var(--amber-bg);border:1px solid #f0c060;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <label style="color:var(--amber)">Patrocinador / Motivo da isenção</label>
+      <input type="text" id="a-patrocinador" placeholder="Ex: Empresa XYZ, Prefeitura, Bolsa atleta...">
+    </div>
+
+    <!-- Campos financeiros (escondidos quando patrocinado) -->
+    <div id="campos-financeiros">
     <div class="form-row">
       <div><label>Valor mensal (R$)</label><input type="number" id="a-valor" placeholder="200"></div>
       <div><label>Início das aulas</label><input type="date" id="a-inicio"></div>
@@ -1229,6 +1250,7 @@ textarea{resize:vertical;min-height:60px}
           <option value="G">G</option><option value="GG">GG</option><option value="XGG">XGG</option>
         </select>
       </div>
+    </div>
     </div>
     <!-- Categoria de jogo -->
     <label>Categoria quando iniciou</label>
@@ -1570,9 +1592,15 @@ function fotoEl(a, cls){
 function gerarCobrancas(){
   cobrancas = [];
   let pid = 1;
-  ['2025-04','2025-05','2025-06'].forEach(mes=>{
-    alunos.forEach(a=>{
-      cobrancas.push({id:pid++,alunoId:a.id,alunoNome:a.nome,mes,valor:a.valor||200,pago:Math.random()>.45,dataPag:null,pgto:a.pgto||'pix',turma:a.turmas.map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.nome:''}).join(', ')});
+  const now = new Date();
+  const meses = [];
+  for(let i=-1;i<=1;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    meses.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  meses.forEach(mes=>{
+    alunos.filter(a=>!a.patrocinado).forEach(a=>{
+      cobrancas.push({id:pid++,alunoId:a.id,alunoNome:a.nome,mes,valor:a.valor||180,pago:Math.random()>.5,dataPag:null,pgto:a.pgto||'pix',turma:a.turmas.map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.nome:''}).join(', ')});
     });
   });
 }
@@ -2125,7 +2153,7 @@ function alunoRowHtml(a){
         ${a.nome}${camisaBadge}${catBadge}${catEvol}
         ${!a.ativo?'<span class="tag-inativo">inativo</span>':''}
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:1px">${calcIdade(a.nasc)} anos · ${a.aulasSemana||1}x/sem · ${fmtR(a.valor)} · ${pgtoLabel(a.pgto)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:1px">${calcIdade(a.nasc)} anos · ${a.aulasSemana||1}x/sem · ${a.patrocinado?'<span style="color:var(--amber);font-weight:600">🤝 '+( a.patrocinador?a.patrocinador:'Patrocinado')+'</span>':fmtR(a.valor)+' · '+pgtoLabel(a.pgto)}</div>
       <div style="font-size:11px;color:var(--muted)">${t}</div>
       ${saldo!==0?`<span class="badge ${saldo>0?'b-blue':'b-red'}" style="margin-top:3px">${saldo>0?'+':''}${saldo} rep.</span>`:''}
       ${a.obs?`<div class="bio-obs">${a.obs}</div>`:''}
@@ -2154,6 +2182,26 @@ async function toggleAtivo(id){
   renderAlunos();
   await sbSalvarAluno(a);
   salvarCacheLocal();
+}
+
+let alunoPatrocinado = false;
+
+function togglePatrocinado(){
+  alunoPatrocinado = !alunoPatrocinado;
+  atualizarUIPatrocinado();
+}
+
+function atualizarUIPatrocinado(){
+  const knob   = document.getElementById('patrocinado-knob');
+  const toggle = document.getElementById('patrocinado-toggle');
+  const fields = document.getElementById('campos-financeiros');
+  const pflds  = document.getElementById('patrocinado-fields');
+  const sub    = document.getElementById('patrocinado-sub');
+  if(knob){ knob.style.left = alunoPatrocinado ? '20px' : '2px'; }
+  if(toggle){ toggle.style.background = alunoPatrocinado ? 'var(--amber)' : 'var(--border)'; }
+  if(fields){ fields.style.display = alunoPatrocinado ? 'none' : 'block'; }
+  if(pflds){  pflds.style.display  = alunoPatrocinado ? 'block' : 'none'; }
+  if(sub){ sub.textContent = alunoPatrocinado ? '✅ Ativo — nenhuma cobrança será gerada' : 'Clique para ativar — não gera cobranças mensais'; }
 }
 
 function showIdade(){
@@ -2187,6 +2235,8 @@ function editarAluno(id){
   document.getElementById('a-resp-tel').value=a.respTel||'';
   const rpe=document.getElementById('a-resp-email'); if(rpe)rpe.value=a.respEmail||'';
   const rpp=document.getElementById('a-resp-parentesco'); if(rpp)rpp.value=a.respParentesco||'Mãe';
+  alunoPatrocinado=a.patrocinado||false; atualizarUIPatrocinado();
+  const apEl=document.getElementById('a-patrocinador'); if(apEl)apEl.value=a.patrocinador||'';
   document.getElementById('a-apelidos').value=(a.apelidos||[]).join(', ');
   document.getElementById('a-idade').value=a.nasc?calcIdade(a.nasc)+' anos':'—';
   document.getElementById('a-camisa').value=a.camisa||'';
@@ -2218,6 +2268,8 @@ function limparFormAluno(){
   const fp=document.getElementById('foto-preview');
   fp.innerHTML='<span style="font-size:24px">📷</span><span style="font-size:10px;color:var(--muted);margin-top:2px">Upload</span>';
   document.getElementById('a-pgto').value='pix';
+  alunoPatrocinado=false; atualizarUIPatrocinado();
+  const apEl=document.getElementById('a-patrocinador'); if(apEl)apEl.value='';
 }
 function setAulasSemana(n){
   aulasSemanaNew=n;
@@ -2254,6 +2306,7 @@ async function salvarAluno(){
   const respTel=document.getElementById('a-resp-tel').value.trim();
   const respEmail=(document.getElementById('a-resp-email')?.value||'').trim();
   const respParentesco=document.getElementById('a-resp-parentesco')?.value||'';
+  const patrocinador=(document.getElementById('a-patrocinador')?.value||'').trim();
   const apelidos=document.getElementById('a-apelidos').value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
   const camisa=document.getElementById('a-camisa').value;
   const diaVencimento=parseInt(document.getElementById('a-vencimento').value)||null;
@@ -2265,7 +2318,7 @@ async function salvarAluno(){
     const idx=alunos.findIndex(a=>a.id===editAlunoId);
     if(idx>=0){
       const antTurmas=alunos[idx].turmas||[];
-      alunos[idx]={...alunos[idx],nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew||alunos[idx].catInicio,catAtual:catAtualNew||alunos[idx].catAtual,dataCatInicio:alunos[idx].dataCatInicio||inicio,inicio,obs,respNome,respTel,respEmail,respParentesco,apelidos,turmas:turmasSel,aulasSemana,foto:fotoNovoDataUrl||alunos[idx].foto};
+      alunos[idx]={...alunos[idx],nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew||alunos[idx].catInicio,catAtual:catAtualNew||alunos[idx].catAtual,dataCatInicio:alunos[idx].dataCatInicio||inicio,inicio,obs,respNome,respTel,respEmail,respParentesco,patrocinado:alunoPatrocinado,patrocinador,apelidos,turmas:turmasSel,aulasSemana,foto:fotoNovoDataUrl||alunos[idx].foto};
       turmas.forEach(t=>{
         const tinha=antTurmas.includes(t.id), tem=turmasSel.includes(t.id);
         if(tinha&&!tem)t.alunos=t.alunos.filter(x=>x!==editAlunoId);
@@ -2275,7 +2328,7 @@ async function salvarAluno(){
     }
   } else {
     const id=alunoIdC++;
-    const novo={id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,respEmail,respParentesco,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}};
+    const novo={id,nome,nasc,tel,valor,pgto,camisa,diaVencimento,catInicio:catInicioNew,catAtual:catAtualNew,dataCatInicio:inicio,turmas:turmasSel,inicio,ativo:true,foto:fotoNovoDataUrl,respNome,respTel,respEmail,respParentesco,patrocinado:alunoPatrocinado,patrocinador,apelidos,obs,aulasSemana,historico:[],reposicoes:{saldo:0,log:[]}};
     alunos.push(novo);
     turmasSel.forEach(tid=>{const t=turmas.find(x=>x.id===tid);if(t&&!t.alunos.includes(id))t.alunos.push(id);});
     gerarCobrancas();
@@ -2708,16 +2761,19 @@ function initFin(){
 function gerarCobrancasMesAtual(){
   const now = new Date();
   const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  alunos.filter(a=>a.ativo).forEach(a=>{
+  alunos.filter(a=>a.ativo && !a.patrocinado).forEach(a=>{
     const jaExiste = cobrancas.find(c=>c.alunoId===a.id && c.mes===mes);
     if(!jaExiste){
       const id = cobIdC++;
-      cobrancas.push({
+      const nova = {
         id, alunoId:a.id, alunoNome:a.nome, mes,
-        valor: a.valor||200, pago:false, dataPag:null,
+        valor: a.valor||180, pago:false, dataPag:null,
         pgto: a.pgto||'pix',
         turma: (a.turmas||[]).map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.nome:''}).filter(Boolean).join(', ')
-      });
+      };
+      cobrancas.push(nova);
+      // Salvar nova cobrança no Supabase
+      sbSalvarCobranca(nova).catch(()=>{});
     }
   });
 }
@@ -5101,7 +5157,7 @@ window.addEventListener('offline', ()=>{
 
 // ===================== MAPEADORES =====================
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
-function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||200), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
+function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', patrocinado:r.patrocinado||false, patrocinador:r.patrocinador||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||180), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
 function mapPresenca(r){ return { id:r.id, _sbId:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
 function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'', msgEnviadaEm:r.msg_enviada_em||null, msgEnviadaVia:r.msg_enviada_via||null }; }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
@@ -5129,7 +5185,8 @@ async function sbSalvarAluno(a){
   const payload = {
     nome:a.nome, nasc:a.nasc, tel:a.tel, turmas:a.turmas, inicio:a.inicio, ativo:a.ativo,
     foto:a.foto||null, resp_nome:a.respNome||null, resp_tel:a.respTel||null,
-    resp_email:a.respEmail||null, resp_parentesco:a.respParentesco||null, obs:a.obs||null,
+    resp_email:a.respEmail||null, resp_parentesco:a.respParentesco||null,
+    patrocinado:a.patrocinado||false, patrocinador:a.patrocinador||null, obs:a.obs||null,
     aulas_semana:a.aulasSemana||1, camisa:a.camisa||null, cat_inicio:a.catInicio||null,
     cat_atual:a.catAtual||null, data_cat_inicio:a.dataCatInicio||null,
     dia_vencimento:a.diaVencimento||null, valor:a.valor||200, pgto:a.pgto||'pix',
