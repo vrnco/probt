@@ -925,8 +925,12 @@ textarea{resize:vertical;min-height:60px}
       <div style="font-size:14px;font-weight:700;margin-bottom:12px">Informações da academia</div>
       <label>Nome da academia / professor</label>
       <input type="text" id="cfg-nome-academia" placeholder="Ex: Beach Tennis Pro — João Silva">
-      <label>Telefone de contato</label>
-      <input type="tel" id="cfg-tel-academia" placeholder="(11) 99999-9999">
+      <div class="form-row">
+        <div><label>Telefone de contato</label>
+          <input type="tel" id="cfg-tel-academia" placeholder="(11) 99999-9999"></div>
+        <div><label>WhatsApp para receber interesse de alunos</label>
+          <input type="tel" id="cfg-watel-academia" placeholder="(11) 99999-9999"></div>
+      </div>
       <label>Cidade</label>
       <input type="text" id="cfg-cidade" placeholder="São Paulo, SP">
       <div style="margin-top:14px;text-align:right">
@@ -1691,14 +1695,29 @@ function renderWeekGrid(){
         const avisosD=avisosFalta.filter(av=>av.turmaId===t.id&&av.data===iso);
         const presD=presencas.find(p=>p.turmaId===t.id&&p.data===iso);
         const antecip=presD?presD.registros.filter(r=>r.status==='antecipacao').length:0;
-        const vagasBadge=avisosD.length?`<span class="week-vaga-badge">🔔 ${avisosD.length} vaga${avisosD.length>1?'s':''}</span>`:
-                         antecip?`<span class="week-vaga-badge" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">⚡ vaga antecip.</span>`:'';
+        const vagasReais = (t.vagas - at.length) + avisosD.length + antecip;
+        const semAlunos  = at.length === 0;
+
+        // Cores dos slots
+        let slotBg, slotBorder, slotColor;
+        if(semAlunos){
+          slotBg='#e3f2fd'; slotBorder='#1a6fbd'; slotColor='#0d47a1'; // azul — nova
+        } else if(vagasReais <= 0){
+          slotBg='#fceaea'; slotBorder='#e53935'; slotColor='#b02020'; // vermelho — cheio
+        } else {
+          slotBg='#fff8e1'; slotBorder='#ffc107'; slotColor='#856404'; // amarelo — com vaga
+        }
+
+        const vagasBadge = avisosD.length
+          ? `<span class="week-vaga-badge">🔔 ${avisosD.length} vaga${avisosD.length>1?'s':''}</span>`
+          : antecip ? `<span class="week-vaga-badge" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">⚡ vaga antecip.</span>` : '';
+
         return`<button class="week-slot"
-          style="${cheio&&!avisosD.length?'background:#fceaea;color:#8a1a1a;border-color:#ffcdd2':''}"
+          style="background:${slotBg};border-color:${slotBorder};color:${slotColor}"
           onclick="abrirTurmaPanel(${t.id},'${iso}')">
           <strong style="font-size:12px">${t.hora}</strong>
-          <span style="display:block;font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
-          <span style="font-size:10px;opacity:.7">${at.length}/${t.vagas}</span>
+          <span style="display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
+          <span style="font-size:10px">${at.length}/${t.vagas}</span>
           ${vagasBadge}
         </button>`;
       }).join('')}
@@ -1803,39 +1822,53 @@ function renderAulasHoje(){
     const avisosHoje  = avisosFalta.filter(av=>av.turmaId===t.id&&av.data===todayStr);
     const presD       = presencas.find(p=>p.turmaId===t.id&&p.data===todayStr);
     const antecipados = presD ? presD.registros.filter(r=>r.status==='antecipacao') : [];
-    const vagasLivres = t.vagas - alunosTurma.length;
-    const temAlerta   = avisosHoje.length>0||antecipados.length>0||vagasLivres>0;
-    const bordaCor    = avisosHoje.length?'#ffc107':antecipados.length?'#66bb6a':vagasLivres?'#42a5f5':'var(--border)';
+    const vagasReais  = (t.vagas - alunosTurma.length) + avisosHoje.length + antecipados.length;
+    const semAlunos   = alunosTurma.length === 0;
 
-    return `<div class="card" style="padding:12px 14px;border-color:${bordaCor};border-width:${temAlerta?'2px':'1px'};margin-bottom:0">
-      <!-- Cabeçalho turma -->
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:16px;font-weight:800;color:var(--accent)">${t.hora}</span>
+    // Sistema de cores
+    let bgCard, borderCard, statusInfo, statusCor;
+    if(semAlunos){
+      bgCard='#e3f2fd'; borderCard='#1a6fbd';
+      statusInfo='🆕 Turma nova — sem alunos ainda';
+      statusCor='#0d47a1';
+    } else if(vagasReais <= 0){
+      bgCard='#fceaea'; borderCard='#e53935';
+      statusInfo='🔴 Turma completa';
+      statusCor='#b02020';
+    } else {
+      bgCard='#fff8e1'; borderCard='#ffc107';
+      statusInfo=`🟡 ${vagasReais} vaga${vagasReais>1?'s':''} disponível${vagasReais>1?'is':''}`;
+      statusCor='#856404';
+    }
+
+    return `<div class="card" style="padding:12px 14px;background:${bgCard};border:2px solid ${borderCard};margin-bottom:0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:16px;font-weight:800;color:${borderCard}">${t.hora}</span>
         <span style="font-size:13px;font-weight:600;flex:1;min-width:0">${t.nome}</span>
         <span class="badge b-blue" style="font-size:10px">${t.categoria||t.nivel||''}</span>
-        <span class="badge ${alunosTurma.length>=t.vagas?'b-red':'b-green'}" style="font-size:10px">${alunosTurma.length}/${t.vagas}</span>
+        <span style="font-size:11px;font-weight:700;color:${statusCor}">${alunosTurma.length}/${t.vagas}</span>
         <button class="btn btn-xs" onclick="abrirTurmaPanel(${t.id},'${todayStr}')">Gerenciar</button>
       </div>
-      ${avisosHoje.length?`<div style="background:#fff8e1;border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px;color:#856404">🔔 Falta avisada: ${avisosHoje.map(av=>{const a=alunos.find(x=>x.id===av.alunoId);return a?a.nome.split(' ')[0]:'?';}).join(', ')}</div>`:''}
-      ${vagasLivres>0?`<div style="background:#e3f2fd;border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px;color:#0d47a1">🟢 ${vagasLivres} vaga${vagasLivres>1?'s':''} disponível${vagasLivres>1?'is':''}</div>`:''}
-      <!-- Alunos -->
+      <div style="font-size:11px;font-weight:600;color:${statusCor};margin-bottom:6px">${statusInfo}
+        ${avisosHoje.length?` · 🔔 ${avisosHoje.length} falta avisada`:''}
+      </div>
       <div>${alunosTurma.map(a=>{
         const temAviso = avisosHoje.some(av=>av.alunoId===a.id);
         const presReg  = presD ? presD.registros.find(r=>r.alunoId===a.id) : null;
         const statusAt = presReg ? presReg.status : null;
         const statusCores={presente:'b-green',faltou:'b-red','faltou-avisou':'b-amber',reposicao:'b-purple',antecipacao:'',};
-        return`<div class="aula-card" style="${temAviso?'opacity:.5;':''}padding:7px 0">
+        return`<div class="aula-card" style="${temAviso?'opacity:.5;':''}padding:6px 0">
           <div class="aula-foto">${a.foto?`<img src="${a.foto}">`:'<span>'+iniciais(a.nome)+'</span>'}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.nome}</div>
-            <div style="font-size:11px;color:var(--muted)">${calcIdade(a.nasc)} anos</div>
+            <div style="font-size:11px;color:var(--muted)">${calcIdade(a.nasc)} anos${temAviso?' · 🔔 falta avisada':''}</div>
           </div>
-          <div style="display:flex;gap:3px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+          <div style="display:flex;gap:3px;flex-shrink:0">
             ${statusAt?`<span class="badge ${statusCores[statusAt]||'b-gray'}" style="font-size:9px">${statusLabel(statusAt)}</span>`:''}
             ${a.reposicoes&&a.reposicoes.saldo>0?`<span class="badge b-blue" style="font-size:9px">${a.reposicoes.saldo}rep</span>`:''}
           </div>
         </div>`;
-      }).join('')||'<div style="font-size:12px;color:var(--muted);padding:6px 0">Nenhum aluno</div>'}</div>
+      }).join('')||'<div style="font-size:12px;color:var(--muted);padding:4px 0;font-style:italic">Sem alunos matriculados</div>'}</div>
     </div>`;
   }).join('');
 }
@@ -3677,7 +3710,7 @@ let cfgAvCategorias = null; // will be deep-cloned from AV_CATEGORIAS on init
 let cfgCategorias = ['Iniciante','C','B','A','Open'];
 let cfgGolpesPlano = ['Saque','Smash','Vollée','Bandeja','Vibora','Lob','Drive','Backhand','Drop','Defesa','Deslocamento','Outro'];
 let cfgPgtos = ['PIX','Boleto','Cartão','Dinheiro','Outro'];
-let cfgInfoSistema = {nome:'', tel:'', cidade:''};
+let cfgInfoSistema = {nome:'', tel:'', watel:'', cidade:''};
 // Padrões para nova turma
 let cfgPadroesTurma = { vagas: 4, mens: 180, cor: '#e91e8c', categoria: '' };
 // Categorias de turma: [{nome, icone, cor}]
@@ -3912,6 +3945,7 @@ function renderCfgSistema(){
   // Info academia
   const n = document.getElementById('cfg-nome-academia'); if(n) n.value = cfgInfoSistema.nome;
   const t = document.getElementById('cfg-tel-academia');  if(t) t.value = cfgInfoSistema.tel;
+  const w = document.getElementById('cfg-watel-academia');if(w) w.value = cfgInfoSistema.watel||'';
   const cc= document.getElementById('cfg-cidade');        if(cc)cc.value = cfgInfoSistema.cidade;
 }
 function cfgAddPgto(){
@@ -3930,6 +3964,7 @@ function salvarPgtos(){
 function salvarInfoSistema(){
   cfgInfoSistema.nome   = (document.getElementById('cfg-nome-academia')||{}).value||'';
   cfgInfoSistema.tel    = (document.getElementById('cfg-tel-academia')||{}).value||'';
+  cfgInfoSistema.watel  = (document.getElementById('cfg-watel-academia')||{}).value||'';
   cfgInfoSistema.cidade = (document.getElementById('cfg-cidade')||{}).value||'';
   showToast('Informações salvas!');
 }
@@ -5394,23 +5429,33 @@ function pubTurmaCard(t, iso, _ci, _cc, isMobile){
   const vagasLivres = t.vagas - ativos;
   const avisosD = avisosFalta.filter(av=>av.turmaId===t.id&&av.data===iso).length;
   const vagasReais = vagasLivres + avisosD;
+  const semAlunos  = ativos === 0;
 
   const cat = t.categoria||'Misto';
   const catCfg = cfgCatTurmas.find(c=>c.nome===cat)||{nome:cat,icone:'',cor:'#1a6fbd'};
   const corTurma = t.cor||catCfg.cor||'#1a6fbd';
 
+  // Cores unificadas com o dashboard
   let bg, border, statusTxt, statusColor;
-  if(vagasReais<=0){
-    bg='#fceaea';border='#e53935';statusTxt='Sem vagas';statusColor='#b02020';
-  } else if(vagasReais===1||vagasLivres/t.vagas<0.3){
-    bg='#fff3e0';border='#ffa000';statusTxt=`${vagasReais} vaga`;statusColor='#8a5000';
+  if(semAlunos){
+    bg='#e3f2fd'; border='#1a6fbd'; statusTxt='🆕 Turma nova'; statusColor='#0d47a1';
+  } else if(vagasReais<=0){
+    bg='#fceaea'; border='#e53935'; statusTxt='🔴 Sem vagas'; statusColor='#b02020';
   } else {
-    bg='#e8f5e9';border='#66bb6a';
-    statusTxt=`${vagasReais} vaga${vagasReais>1?'s':''}${avisosD?` (+${avisosD} aviso)`:''}`;
-    statusColor='#2d7a2d';
+    bg='#fff8e1'; border='#ffc107';
+    statusTxt=`🟡 ${vagasReais} vaga${vagasReais>1?'s':''}${avisosD?` (+${avisosD} aviso)`:''}`;
+    statusColor='#856404';
   }
 
-  return `<div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:${isMobile?'10px 12px':'8px 10px'};margin-bottom:${isMobile?'8px':'6px'};border-left:4px solid ${corTurma}">
+  // Link de interesse via WhatsApp
+  const watel = cfgInfoSistema.watel||cfgInfoSistema.tel||'';
+  const diasStr = t.dias.map(d=>({seg:'Seg',ter:'Ter',qua:'Qua',qui:'Qui',sex:'Sex',sab:'Sáb',dom:'Dom'}[d]||d)).join(', ');
+  const msgInt = encodeURIComponent(
+    `Olá! Vi a grade de horários e tenho interesse em uma vaga:\n\n🎾 *${t.nome}*\n🕐 ${t.hora} · ${diasStr}\n👥 Categoria: ${cat}\n\nPoderia me passar mais informações?`
+  );
+  const waLink = watel ? `https://wa.me/55${watel.replace(/\D/g,'')}?text=${msgInt}` : '';
+
+  return `<div style="background:${bg};border:2px solid ${border};border-radius:10px;padding:${isMobile?'12px':'9px 10px'};margin-bottom:${isMobile?'8px':'6px'};border-left:4px solid ${corTurma}">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
       <span style="font-size:${isMobile?'16px':'14px'};font-weight:800;color:${corTurma}">${t.hora}</span>
       <span style="flex:1;font-size:${isMobile?'13px':'11px'};font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
@@ -5419,7 +5464,13 @@ function pubTurmaCard(t, iso, _ci, _cc, isMobile){
       ${catCfg.icone?catCfg.icone+' ':''}${cat}
     </span>
     <div style="margin-top:6px;font-size:${isMobile?'12px':'11px'};font-weight:700;color:${statusColor}">${statusTxt}</div>
-    <div style="font-size:10px;color:#888;margin-top:2px">${ativos}/${t.vagas} alunos</div>
+    <div style="font-size:10px;color:#888;margin-top:2px;margin-bottom:${waLink&&vagasReais>0?'7px':'0'}">${ativos}/${t.vagas} alunos</div>
+    ${waLink && vagasReais > 0 ? `
+    <a href="${waLink}" target="_blank"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;background:#25d366;color:#fff;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;text-decoration:none">
+      💬 Tenho interesse nesta vaga!
+    </a>` : vagasReais<=0&&!semAlunos ? `
+    <div style="text-align:center;font-size:11px;color:#999;font-style:italic">Turma completa no momento</div>` : ''}
   </div>`;
 }
 
