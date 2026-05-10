@@ -565,10 +565,15 @@ textarea{resize:vertical;min-height:60px}
           <div style="font-size:12px;color:var(--muted);margin-top:2px" id="ext-resumo-parse"></div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 10px">
-            <input type="checkbox" id="ext-filtro-recebidos" onchange="renderExtratoLinhas()" style="cursor:pointer">
-            <label for="ext-filtro-recebidos" style="font-size:12px;cursor:pointer;white-space:nowrap">Só recebidos</label>
-          </div>
+            <div style="display:flex;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;align-items:center">
+              <label style="font-size:12px;color:var(--muted);white-space:nowrap">Mostrar:</label>
+              <select id="ext-filtro-tipo" onchange="renderExtratoLinhas()" style="border:none;background:transparent;font-size:12px;cursor:pointer;padding:2px 0">
+                <option value="todos">Todos os lançamentos</option>
+                <option value="creditos" selected>Só recebimentos (créditos)</option>
+                <option value="identificados">Só identificados</option>
+                <option value="pendentes">Só pendentes de identificação</option>
+              </select>
+            </div>
           <button class="btn btn-success btn-sm" onclick="aplicarBaixas()">✅ Aplicar baixas</button>
         </div>
       </div>
@@ -2208,7 +2213,29 @@ function alunoRowHtml(a){
   </div>`;
 }
 
-async function toggleAtivo(id){
+async function excluirAluno(id){
+  const a = alunos.find(x=>x.id===id); if(!a) return;
+  if(!confirm(`Tem certeza que deseja EXCLUIR permanentemente o cadastro de ${a.nome}?\n\nEsta ação não pode ser desfeita.`)) return;
+  const motivo = prompt(`Motivo da exclusão de ${a.nome.split(' ')[0]} (obrigatório):`, '');
+  if(motivo===null) return; // cancelou
+  if(!motivo.trim()){ alert('Informe o motivo da exclusão.'); return; }
+  // Remove da memória
+  alunos = alunos.filter(x=>x.id!==id);
+  // Remove das turmas
+  turmas.forEach(t=>{ t.alunos = t.alunos.filter(x=>x!==id); });
+  // Remove cobranças
+  cobrancas = cobrancas.filter(c=>c.alunoId!==id);
+  closeModal('modal-det');
+  renderAlunos();
+  initDashboard();
+  showToast(`${a.nome.split(' ')[0]} excluído do cadastro.`);
+  // Remover do Supabase
+  const sbId = a._sbId||a.id;
+  await sbDelete('alunos', sbId);
+  // Atualizar turmas no Supabase
+  await Promise.all(turmas.map(t=>sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos})));
+  salvarCacheLocal();
+}
   const a=alunos.find(x=>x.id===id); if(!a)return;
   if(a.ativo){
     const obs=prompt('Motivo para desativar (opcional):','');
@@ -2447,7 +2474,8 @@ function verAluno(id){
   document.getElementById('det-acoes').innerHTML=`
     <button class="btn btn-sm ${a.ativo?'btn-danger':'btn-success'}" onclick="toggleAtivo(${a.id});closeModal('modal-det')">${a.ativo?'Desativar aluno':'Reativar aluno'}</button>
     <button class="btn btn-sm" onclick="editarAluno(${a.id});closeModal('modal-det')">Editar</button>
-    ${a.tel?`<button class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366" onclick="enviarBoasvindasWA(${a.id})">💬 Boas-vindas</button>`:''}`;
+    ${a.tel?`<button class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366" onclick="enviarBoasvindasWA(${a.id})">💬 Boas-vindas</button>`:''}
+    <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="excluirAluno(${a.id})">🗑 Excluir</button>`;
   openModal('modal-det');
 }
 function pararAluno(id){
@@ -3225,9 +3253,13 @@ function processarLinhasExtrato(linhasRaw){
 
   const conf = extratoLinhas.filter(l=>l.confirmado).length;
   const nconf = extratoLinhas.filter(l=>!l.confirmado).length;
+  const creditos = extratoLinhas.filter(l=>!l.valor||l.valor>0).length;
+  const debitos  = extratoLinhas.filter(l=>l.valor&&l.valor<0).length;
   document.getElementById('ext-resumo-parse').textContent =
-    `${conf} identificado${conf!==1?'s':''} automaticamente · ${nconf} aguardando identificação manual`;
-
+    `${creditos} recebimento${creditos!==1?'s':''} · ${debitos} débito${debitos!==1?'s':''} · ${conf} identificado${conf!==1?'s':''} · ${nconf} pendente${nconf!==1?'s':''}`;
+  // Seleciona automaticamente o filtro de créditos
+  const filtSel = document.getElementById('ext-filtro-tipo');
+  if(filtSel) filtSel.value='creditos';
   renderExtratoLinhas();
   document.getElementById('extrato-result').style.display='block';
 }
@@ -3244,9 +3276,12 @@ function similarity(a,b){
 function renderExtratoLinhas(){
   const c=document.getElementById('extrato-linhas');
   if(!extratoLinhas.length){c.innerHTML='<div class="empty">Sem lançamentos</div>';return;}
-  const soRecebidos = document.getElementById('ext-filtro-recebidos')?.checked;
+  const filtro = document.getElementById('ext-filtro-tipo')?.value || 'creditos';
   let lista = [...extratoLinhas].sort((a,b)=>(b.confirmado?0:1)-(a.confirmado?0:1));
-  if(soRecebidos) lista = lista.filter(l=>l.confirmado);
+
+  if(filtro==='creditos')    lista = lista.filter(l=>!l.valor||l.valor>0);
+  if(filtro==='identificados') lista = lista.filter(l=>l.confirmado||l.splitAlunos?.length);
+  if(filtro==='pendentes')   lista = lista.filter(l=>!l.confirmado&&!l.splitAlunos?.length);
 
   c.innerHTML=lista.map(l=>{
     const isSplit = l.splitAlunos && l.splitAlunos.length > 1;
@@ -3899,10 +3934,10 @@ function cfgRemoveItem(gi, ii){
   renderCfgAvaliacao();
 }
 function salvarAvCategorias(){
-  // Aplica ao AV_CATEGORIAS global (referência mutável)
   AV_CATEGORIAS.length = 0;
   cfgAvCategorias.forEach(g=>AV_CATEGORIAS.push(JSON.parse(JSON.stringify(g))));
-  showToast('Avaliação técnica atualizada!');
+  salvarCacheLocal();
+  showToast('Avaliação técnica atualizada! ✅');
 }
 
 // ---------- CATEGORIAS ALUNOS ----------
@@ -3922,14 +3957,14 @@ function cfgAddCategoria(){
   renderCfgCategorias();
 }
 function salvarCategorias(){
-  // Atualiza os botões de categoria nos modais dinamicamente
   ['cat-inicio-btns','cat-atual-btns'].forEach(pid=>{
     const p = document.getElementById(pid); if(!p) return;
     p.innerHTML = cfgCategorias.map(cat=>
       `<button type="button" class="dia-btn" onclick="set${pid==='cat-inicio-btns'?'CatInicio':'CatAtual'}('${cat}')">${cat}</button>`
     ).join('');
   });
-  showToast('Categorias salvas!');
+  salvarCacheLocal();
+  showToast('Categorias salvas! ✅');
 }
 
 // ---------- GOLPES PLANO ----------
@@ -3949,12 +3984,12 @@ function cfgAddGolpe(){
   renderCfgGolpes();
 }
 function salvarGolpes(){
-  // Atualiza o select de golpe no modal de plano
   const sel = document.getElementById('pl-golpe'); if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = '<option value="">— Selecione —</option>'+
     cfgGolpesPlano.map(g=>`<option ${g===cur?'selected':''}>${g}</option>`).join('');
-  showToast('Golpes atualizados no Plano de Aula!');
+  salvarCacheLocal();
+  showToast('Golpes salvos! ✅');
 }
 
 // ---------- FORMAS DE PAGAMENTO ----------
@@ -4003,18 +4038,19 @@ function cfgAddPgto(){
   renderCfgSistema();
 }
 function salvarPgtos(){
-  // Atualiza select de pagamento no modal de aluno
   const sel = document.getElementById('a-pgto'); if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = cfgPgtos.map(p=>`<option value="${p.toLowerCase()}" ${p.toLowerCase()===cur?'selected':''}>${p}</option>`).join('');
-  showToast('Formas de pagamento atualizadas!');
+  salvarCacheLocal();
+  showToast('Formas de pagamento salvas! ✅');
 }
 function salvarInfoSistema(){
   cfgInfoSistema.nome   = (document.getElementById('cfg-nome-academia')||{}).value||'';
   cfgInfoSistema.tel    = (document.getElementById('cfg-tel-academia')||{}).value||'';
   cfgInfoSistema.watel  = (document.getElementById('cfg-watel-academia')||{}).value||'';
   cfgInfoSistema.cidade = (document.getElementById('cfg-cidade')||{}).value||'';
-  showToast('Informações salvas!');
+  salvarCacheLocal();
+  showToast('Informações salvas! ✅');
 }
 
 // ---------- EXPORT ----------
@@ -4121,7 +4157,8 @@ function salvarMsgWA(){
   if(mc) waCfg.msgCobranca    = mc.value;
   if(mf) waCfg.msgConfirmacao = mf.value;
   if(mb) waCfg.msgBoasvindas  = mb.value;
-  showToast('Mensagens salvas!');
+  salvarCacheLocal();
+  showToast('Mensagens salvas! ✅');
 }
 
 function resetMsgWA(tipo){
@@ -5092,13 +5129,17 @@ const CACHE_TTL   = 1000 * 60 * 60 * 24 * 7; // 7 dias
 
 function salvarCacheLocal(){
   try {
-    const dados = { turmas, alunos, presencas, cobrancas, avisosFalta, conteudos,
-      turmaIdC, alunoIdC, presIdC, cobIdC, conteudoIdC, cfgCatTurmas, cfgPadroesTurma };
-    // Fotos são base64 e podem ser grandes — guardar sem elas para economizar espaço
-    const dadosSemFotos = { ...dados,
-      alunos: alunos.map(a=>({...a, foto: a.foto&&a.foto.startsWith('http')?a.foto:''}))
+    const dados = {
+      turmas, alunos, presencas, cobrancas, avisosFalta, conteudos,
+      turmaIdC, alunoIdC, presIdC, cobIdC, conteudoIdC,
+      cfgCatTurmas, cfgPadroesTurma, cfgInfoSistema,
+      waCfg, cfgCategorias, cfgGolpesPlano, cfgPgtos,
+      cfgAvCategorias: cfgAvCategorias || AV_CATEGORIAS,
+      waNotificados
     };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(dadosSemFotos));
+    // Remove fotos base64 para economizar espaço
+    const dadosSem = {...dados, alunos: alunos.map(a=>({...a, foto: a.foto&&a.foto.startsWith('http')?a.foto:''}))};
+    localStorage.setItem(CACHE_KEY, JSON.stringify(dadosSem));
     localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
   } catch(e){ console.warn('Cache local cheio ou erro:', e); }
 }
