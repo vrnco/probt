@@ -1111,14 +1111,21 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 
-<!-- Modal adicionar aluno à turma -->
+<!-- Modal adicionar alunos à turma (multi-select) -->
 <div id="modal-add-aluno-turma" class="modal-bg">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-title">Adicionar aluno à turma</div>
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Adicionar alunos à turma</div>
     <button class="modal-close" onclick="closeModal('modal-add-aluno-turma')">×</button>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px" id="aat-turma-info"></div>
-    <input type="text" id="aat-busca" placeholder="Buscar aluno..." oninput="renderListaAddAluno()" style="margin-bottom:10px">
-    <div id="aat-lista" style="max-height:300px;overflow-y:auto"></div>
+    <input type="text" id="aat-busca" placeholder="🔍 Buscar aluno..." oninput="renderListaAddAluno()" style="margin-bottom:10px">
+    <div id="aat-lista" style="max-height:320px;overflow-y:auto"></div>
+    <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:13px;color:var(--muted)" id="aat-selecionados-info">Nenhum selecionado</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="closeModal('modal-add-aluno-turma')">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmarAddAlunos()">✅ Adicionar selecionados</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2153,9 +2160,9 @@ async function adjRep(delta){
 
 // ===================== ALUNOS =====================
 function renderAlunos(){
-  const busca=(document.getElementById('busca-aluno').value||'').toLowerCase();
-  const ativos=alunos.filter(a=>a.ativo&&a.nome.toLowerCase().includes(busca));
-  const inativos=alunos.filter(a=>!a.ativo&&a.nome.toLowerCase().includes(busca));
+  const busca=normalize(document.getElementById('busca-aluno').value||'');
+  const ativos=alunos.filter(a=>a.ativo&&normalize(a.nome).includes(busca));
+  const inativos=alunos.filter(a=>!a.ativo&&normalize(a.nome).includes(busca));
   const totalAtivos=alunos.filter(a=>a.ativo).length;
   const totalInativos=alunos.filter(a=>!a.ativo).length;
   const turmasMapa={};
@@ -2636,34 +2643,75 @@ async function removerAlunoDaTurma(alunoId, turmaId){
   salvarCacheLocal();
 }
 
+let aatSelecionados = new Set();
+
 function abrirAdicionarAluno(){
   const t=turmas.find(x=>x.id===turmaPanelId); if(!t)return;
-  document.getElementById('aat-turma-info').textContent=
-    `${t.nome} · ${t.alunos.filter(id=>alunos.find(a=>a.id===id&&a.ativo)).length}/${t.vagas} vagas`;
+  aatSelecionados = new Set();
+  const ocupados = alunos.filter(a=>t.alunos.includes(a.id)&&a.ativo).length;
+  document.getElementById('aat-turma-info').innerHTML=
+    `<strong>${t.nome}</strong> · ${t.hora} · ${ocupados}/${t.vagas} vagas`;
   document.getElementById('aat-busca').value='';
+  document.getElementById('aat-selecionados-info').textContent='Nenhum selecionado';
   renderListaAddAluno();
   openModal('modal-add-aluno-turma');
+  setTimeout(()=>document.getElementById('aat-busca').focus(),150);
 }
 
 function renderListaAddAluno(){
   const t=turmas.find(x=>x.id===turmaPanelId); if(!t)return;
-  const busca=document.getElementById('aat-busca').value.toLowerCase();
-  // Alunos que NÃO estão nesta turma
-  const disponiveis=alunos.filter(a=>a.ativo&&!t.alunos.includes(a.id)&&
-    (!busca||a.nome.toLowerCase().includes(busca)));
-  document.getElementById('aat-lista').innerHTML=disponiveis.length
-    ?disponiveis.map(a=>{
-      const outrasTurmas=a.turmas.map(tid=>{const tx=turmas.find(x=>x.id===tid);return tx?tx.nome:''}).filter(Boolean).join(', ');
-      return`<div class="tp-aluno-row" style="cursor:pointer" onclick="adicionarAlunoNaTurma(${a.id})">
-        ${fotoEl(a,'avatar')}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${a.nome}</div>
-          <div style="font-size:11px;color:var(--muted)">${outrasTurmas||'Sem turma'}</div>
-        </div>
-        <button class="btn btn-primary btn-xs">+ Adicionar</button>
-      </div>`;
-    }).join('')
-    :'<div class="empty">Nenhum aluno disponível</div>';
+  const busca=normalize(document.getElementById('aat-busca').value||'');
+  const disponiveis=alunos.filter(a=>
+    a.ativo && !t.alunos.includes(a.id) &&
+    (!busca || normalize(a.nome).includes(busca))
+  );
+  document.getElementById('aat-lista').innerHTML = disponiveis.length
+    ? disponiveis.map(a=>{
+        const sel = aatSelecionados.has(a.id);
+        const outrasTurmas=a.turmas.map(tid=>{const tx=turmas.find(x=>x.id===tid);return tx?tx.nome:''}).filter(Boolean).join(', ');
+        return`<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:8px;cursor:pointer;background:${sel?'var(--accent-light)':''};" onclick="toggleAatAluno(${a.id})">
+          <div style="width:22px;height:22px;border-radius:5px;border:2px solid ${sel?'var(--accent)':'var(--border)'};background:${sel?'var(--accent)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${sel?'<span style="color:#fff;font-size:12px;font-weight:700">✓</span>':''}</div>
+          ${fotoEl(a,'avatar')}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${a.nome}</div>
+            <div style="font-size:11px;color:var(--muted)">${outrasTurmas||'Sem outra turma'}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="empty">Nenhum aluno disponível</div>';
+}
+
+function toggleAatAluno(id){
+  if(aatSelecionados.has(id)) aatSelecionados.delete(id);
+  else aatSelecionados.add(id);
+  const n = aatSelecionados.size;
+  document.getElementById('aat-selecionados-info').textContent =
+    n===0 ? 'Nenhum selecionado' : `${n} aluno${n>1?'s':''} selecionado${n>1?'s':''}`;
+  renderListaAddAluno();
+}
+
+async function confirmarAddAlunos(){
+  if(aatSelecionados.size===0){ showToast('Selecione ao menos um aluno.'); return; }
+  const t=turmas.find(x=>x.id===turmaPanelId); if(!t)return;
+  const ativos=t.alunos.filter(id=>alunos.find(x=>x.id===id&&x.ativo)).length;
+  if(ativos + aatSelecionados.size > t.vagas){
+    if(!confirm(`A turma tem ${t.vagas} vagas. Ficará com ${ativos+aatSelecionados.size}. Continuar?`)) return;
+  }
+  const adicionados=[];
+  for(const alunoId of aatSelecionados){
+    const a=alunos.find(x=>x.id===alunoId); if(!a)continue;
+    if(!t.alunos.includes(alunoId))t.alunos.push(alunoId);
+    if(!a.turmas)a.turmas=[];
+    if(!a.turmas.includes(t.id))a.turmas.push(t.id);
+    adicionados.push(a);
+  }
+  closeModal('modal-add-aluno-turma');
+  renderTurmaPanel(); initDashboard();
+  showToast(`${adicionados.length} aluno${adicionados.length>1?'s':''} adicionado${adicionados.length>1?'s':''}! ✅`);
+  await Promise.all(adicionados.map(a=>sbSalvarAluno(a)));
+  await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
+  salvarCacheLocal();
 }
 
 async function adicionarAlunoNaTurma(alunoId){
@@ -3264,12 +3312,12 @@ function abrirMatch(lid){
 }
 
 function renderMatchLista(){
-  const busca=(document.getElementById('match-busca')?.value||'').toLowerCase().trim();
+  const busca=normalize(document.getElementById('match-busca')?.value||'');
   const mesAtual=document.getElementById('filtro-mes').value;
   const lista = alunos.filter(a=>{
     if(!busca) return true;
-    if(a.nome.toLowerCase().includes(busca)) return true;
-    return (a.apelidos||[]).some(ap=>ap.toLowerCase().includes(busca));
+    if(normalize(a.nome).includes(busca)) return true;
+    return (a.apelidos||[]).some(ap=>normalize(ap).includes(busca));
   }).sort((a,b)=>{
     const ca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
     const cb2=cobrancas.find(c=>c.alunoId===b.id&&c.mes===mesAtual&&!c.pago);
@@ -3346,9 +3394,9 @@ function salvarApelidosModal(){
 }
 
 function renderMatchListaSplit(){
-  const busca=(document.getElementById('match-busca-split')?.value||'').toLowerCase();
+  const busca=normalize(document.getElementById('match-busca-split')?.value||'');
   const mesAtual=document.getElementById('filtro-mes').value;
-  const lista=alunos.filter(a=>a.ativo&&(!busca||a.nome.toLowerCase().includes(busca)));
+  const lista=alunos.filter(a=>a.ativo&&(!busca||normalize(a.nome).includes(busca)));
   const selIds=splitSelecionados.map(s=>s.alunoId);
   document.getElementById('match-lista-split').innerHTML=lista.map(a=>{
     const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
@@ -3491,12 +3539,12 @@ function setFiltroPlano(cat, btn){
 }
 
 function renderPlano(){
-  const busca = (document.getElementById('pl-busca').value||'').toLowerCase();
+  const busca = normalize(document.getElementById('pl-busca').value||'');
   let lista = conteudos.filter(c=>{
     const catOk = filtroPlanoAtual==='todos' || c.categoria===filtroPlanoAtual;
-    const buscaOk = !busca || c.titulo.toLowerCase().includes(busca)
-      || (c.golpe||'').toLowerCase().includes(busca)
-      || (c.objetivo||'').toLowerCase().includes(busca)
+    const buscaOk = !busca || normalize(c.titulo).includes(busca)
+      || normalize(c.golpe||'').includes(busca)
+      || normalize(c.objetivo||'').includes(busca)
       || (c.tags||[]).some(t=>t.includes(busca));
     return catOk && buscaOk;
   });
@@ -5075,6 +5123,11 @@ function carregarCacheLocal(){
     conteudoIdC = d.conteudoIdC || 4;
     if(d.cfgCatTurmas && d.cfgCatTurmas.length) cfgCatTurmas = d.cfgCatTurmas;
     if(d.cfgPadroesTurma) cfgPadroesTurma = {...cfgPadroesTurma, ...d.cfgPadroesTurma};
+    if(d.cfgInfoSistema)  cfgInfoSistema  = {...cfgInfoSistema, ...d.cfgInfoSistema};
+    if(d.waCfg)           waCfg           = {...waCfg, ...d.waCfg};
+    if(d.cfgCategorias)   cfgCategorias   = d.cfgCategorias;
+    if(d.cfgGolpesPlano)  cfgGolpesPlano  = d.cfgGolpesPlano;
+    if(d.cfgPgtos)        cfgPgtos        = d.cfgPgtos;
     const ts_fmt = new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     console.log(`📦 Cache local carregado (${ts_fmt}) · ${alunos.length} alunos`);
     return ts_fmt; // retorna timestamp para exibir no aviso
