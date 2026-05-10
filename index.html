@@ -3864,8 +3864,9 @@ function cfgAddCatTurma(){
 
 function salvarCatTurmas(){
   atualizarSelectCategoria();
-  showToast('Categorias de turma salvas!');
+  sbSalvarConfig('cfgCatTurmas', cfgCatTurmas);
   salvarCacheLocal();
+  showToast('Categorias de turma salvas! ✅');
 }
 
 // Atualiza o <select id="t-categoria"> no modal de turma
@@ -3936,6 +3937,7 @@ function cfgRemoveItem(gi, ii){
 function salvarAvCategorias(){
   AV_CATEGORIAS.length = 0;
   cfgAvCategorias.forEach(g=>AV_CATEGORIAS.push(JSON.parse(JSON.stringify(g))));
+  sbSalvarConfig('cfgAvCategorias', cfgAvCategorias);
   salvarCacheLocal();
   showToast('Avaliação técnica atualizada! ✅');
 }
@@ -3963,6 +3965,7 @@ function salvarCategorias(){
       `<button type="button" class="dia-btn" onclick="set${pid==='cat-inicio-btns'?'CatInicio':'CatAtual'}('${cat}')">${cat}</button>`
     ).join('');
   });
+  sbSalvarConfig('cfgCategorias', cfgCategorias);
   salvarCacheLocal();
   showToast('Categorias salvas! ✅');
 }
@@ -3988,6 +3991,7 @@ function salvarGolpes(){
   const cur = sel.value;
   sel.innerHTML = '<option value="">— Selecione —</option>'+
     cfgGolpesPlano.map(g=>`<option ${g===cur?'selected':''}>${g}</option>`).join('');
+  sbSalvarConfig('cfgGolpesPlano', cfgGolpesPlano);
   salvarCacheLocal();
   showToast('Golpes salvos! ✅');
 }
@@ -4013,6 +4017,7 @@ function salvarPadroesTurma(){
   cfgPadroesTurma.mens      = parseFloat(document.getElementById('cfg-padrao-mens').value)||180;
   cfgPadroesTurma.cor       = document.getElementById('cfg-padrao-cor').value||'#e91e8c';
   cfgPadroesTurma.categoria = document.getElementById('cfg-padrao-categoria').value||cfgCatTurmas[0]?.nome||'Misto';
+  sbSalvarConfig('cfgPadroesTurma', cfgPadroesTurma);
   salvarCacheLocal();
   showToast('Padrões de turma salvos! ✅');
 }
@@ -4041,6 +4046,7 @@ function salvarPgtos(){
   const sel = document.getElementById('a-pgto'); if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = cfgPgtos.map(p=>`<option value="${p.toLowerCase()}" ${p.toLowerCase()===cur?'selected':''}>${p}</option>`).join('');
+  sbSalvarConfig('cfgPgtos', cfgPgtos);
   salvarCacheLocal();
   showToast('Formas de pagamento salvas! ✅');
 }
@@ -4049,6 +4055,7 @@ function salvarInfoSistema(){
   cfgInfoSistema.tel    = (document.getElementById('cfg-tel-academia')||{}).value||'';
   cfgInfoSistema.watel  = (document.getElementById('cfg-watel-academia')||{}).value||'';
   cfgInfoSistema.cidade = (document.getElementById('cfg-cidade')||{}).value||'';
+  sbSalvarConfig('cfgInfoSistema', cfgInfoSistema);
   salvarCacheLocal();
   showToast('Informações salvas! ✅');
 }
@@ -4157,6 +4164,7 @@ function salvarMsgWA(){
   if(mc) waCfg.msgCobranca    = mc.value;
   if(mf) waCfg.msgConfirmacao = mf.value;
   if(mb) waCfg.msgBoasvindas  = mb.value;
+  sbSalvarConfig('waCfg', waCfg);
   salvarCacheLocal();
   showToast('Mensagens salvas! ✅');
 }
@@ -5216,6 +5224,35 @@ async function carregarTudo(){
   _carregando = false;
 }
 
+// ---- Salvar config individual no Supabase ----
+async function sbSalvarConfig(chave, valor){
+  try {
+    await fetch(`${SB_URL}/rest/v1/configuracoes`, {
+      method:'POST',
+      headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({chave, valor, updated_at: new Date().toISOString()})
+    });
+  } catch(e){ console.warn('Erro ao salvar config:', chave, e); }
+}
+
+// ---- Carregar todas as configs do Supabase ----
+async function carregarConfigsDoSupabase(){
+  try {
+    const rows = await sbGet('configuracoes', 'select=chave,valor');
+    rows.forEach(r=>{
+      const v = r.valor;
+      if(r.chave==='cfgInfoSistema'  && v) cfgInfoSistema  = {...cfgInfoSistema,  ...v};
+      if(r.chave==='cfgPgtos'        && v) cfgPgtos        = v;
+      if(r.chave==='cfgGolpesPlano'  && v) cfgGolpesPlano  = v;
+      if(r.chave==='cfgCategorias'   && v) cfgCategorias   = v;
+      if(r.chave==='cfgCatTurmas'    && v) cfgCatTurmas    = v;
+      if(r.chave==='cfgPadroesTurma' && v) cfgPadroesTurma = {...cfgPadroesTurma, ...v};
+      if(r.chave==='waCfg'           && v) waCfg           = {...waCfg, ...v};
+      if(r.chave==='cfgAvCategorias' && v){ cfgAvCategorias = v; AV_CATEGORIAS.length=0; v.forEach(g=>AV_CATEGORIAS.push(g)); }
+    });
+  } catch(e){ console.warn('Configs não carregadas (tabela não existe ainda?):', e); }
+}
+
 async function buscarDoSupabase(){
   const [t, a, p, c, av, co] = await Promise.all([
     sbGet('turmas',   'order=hora'),
@@ -5236,6 +5273,8 @@ async function buscarDoSupabase(){
   presIdC     = (presencas.reduce((m,x)=>Math.max(m,x.id),0)||0)+1;
   cobIdC      = (cobrancas.reduce((m,x)=>Math.max(m,x.id),0)||0)+1;
   conteudoIdC = (conteudos.reduce((m,x)=>Math.max(m,x.id),0)||0)+1;
+  // Carregar configs também
+  await carregarConfigsDoSupabase();
   console.log(`✅ Supabase: ${turmas.length} turmas, ${alunos.length} alunos`);
 }
 
