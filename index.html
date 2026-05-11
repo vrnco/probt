@@ -957,10 +957,13 @@ textarea{resize:vertical;min-height:60px}
     <div class="card" style="padding:16px">
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">Dados do sistema</div>
       <div id="cfg-storage-info" style="font-size:13px;color:var(--muted);margin-bottom:12px">Calculando...</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn btn-sm" onclick="exportarDados()">📥 Exportar backup (JSON)</button>
-        <button class="btn btn-sm" onclick="importarBackup()">📤 Restaurar backup</button>
+        <button class="btn btn-sm btn-primary" onclick="limparCacheLocal()">🔄 Limpar cache local</button>
         <button class="btn btn-danger btn-sm" onclick="limparDados()">🗑 Apagar todos os dados</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">
+        💡 Se o sistema aparecer com dados errados ou desatualizados, clique em <strong>"Limpar cache local"</strong> — o sistema vai recarregar tudo direto do Supabase.
       </div>
       <!-- Diagnóstico Supabase -->
       <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
@@ -5191,34 +5194,24 @@ async function carregarTudo(){
   _carregando = true;
 
   if(!estaOnline()){
-    // SEM INTERNET — tenta cache local
+    // SEM INTERNET — usa cache local
     const ts = carregarCacheLocal();
     _carregando = false;
-    if(ts){
-      mostrarBannerOffline(ts);
-    } else {
-      mostrarErroSemCache();
-    }
-    return; // UI é inicializada pelo iniciarApp após este return
-  }
-
-  // COM INTERNET — tenta cache primeiro para resposta instantânea
-  const tsCache = carregarCacheLocal();
-  if(tsCache){
-    // Tem cache: mostra na hora, sincroniza por baixo
-    _carregando = false;
-    sincronizarBackground(); // não await — roda em segundo plano
+    if(ts){ mostrarBannerOffline(ts); }
+    else { mostrarErroSemCache(); }
     return;
   }
 
-  // SEM CACHE — primeira vez, carrega do Supabase com loading
+  // COM INTERNET — sempre busca do Supabase (fonte verdadeira)
   mostrarLoadingGlobal(true);
   try {
     await buscarDoSupabase();
-    salvarCacheLocal();
+    salvarCacheLocal(); // atualiza cache para uso offline
   } catch(e){
-    console.error('Erro ao carregar dados:', e);
-    showToast('Erro ao carregar. Verifique a conexão.');
+    console.error('Erro ao carregar do Supabase:', e);
+    // Fallback: tenta cache local
+    const ts = carregarCacheLocal();
+    if(!ts) showToast('❌ Erro ao carregar dados. Verifique a conexão.');
   }
   mostrarLoadingGlobal(false);
   _carregando = false;
@@ -5806,6 +5799,13 @@ function exportarDados(){
   a.download = 'beach-tennis-backup-'+today()+'.json';
   a.click();
   showToast('Backup exportado!');
+}
+
+function limparCacheLocal(){
+  localStorage.removeItem(CACHE_KEY);
+  localStorage.removeItem(CACHE_TS_KEY);
+  showToast('Cache limpo! Recarregando do Supabase...');
+  setTimeout(()=>location.reload(), 1200);
 }
 
 function limparDados(){
