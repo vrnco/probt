@@ -5927,19 +5927,22 @@ self.addEventListener('activate', e => {
 
 // ===================== INIT =====================
 (function(){
+  // Limpar cache que pode estar corrompido
+  try {
+    const raw = localStorage.getItem('bt_dados_cache_v1');
+    if(raw){ const d=JSON.parse(raw); if(!d.turmas&&!d.alunos){ localStorage.removeItem('bt_dados_cache_v1'); localStorage.removeItem('bt_dados_cache_ts'); } }
+  } catch(e){ localStorage.removeItem('bt_dados_cache_v1'); localStorage.removeItem('bt_dados_cache_ts'); }
+
+  // Esconde nav e pages ate autenticar
   const nav = document.querySelector('.nav');
   if(nav) nav.style.display='none';
   document.querySelectorAll('.page').forEach(p=>p.style.display='none');
 
   if(recuperarSessao()){
-    // Se token expirou, tenta renovar antes de iniciar
     if(!tokenValido()){
       tentarRefreshSessao().then(ok=>{
         if(ok){ iniciarApp(); }
-        else {
-          // Refresh falhou — volta para tela de login mas com dados públicos
-          carregarDadosPublicos().then(()=>mostrarTelaLogin());
-        }
+        else { carregarDadosPublicos().then(()=>mostrarTelaLogin()); }
       });
     } else {
       iniciarApp();
@@ -5951,26 +5954,15 @@ self.addEventListener('activate', e => {
 
 async function carregarDadosPublicos(){
   try {
-    // Tenta cache primeiro (não precisa de internet)
-    const temCache = carregarCacheLocal();
-    if(temCache) return;
-    // Sem cache: busca do Supabase com anon key (leitura pública)
     const [t, a, av] = await Promise.all([
       sbGet('turmas',       'order=hora&select=id,hora,dias,nome,vagas,nivel,categoria,cor,alunos'),
       sbGet('alunos',       'select=id,ativo,turmas'),
       sbGet('avisos_falta', 'select=id,aluno_id,turma_id,data&order=data'),
     ]);
     turmas      = t.map(mapTurma);
-    alunos      = a.map(r=>({
-      id:r.id, ativo:r.ativo!==false, turmas:r.turmas||[],
-      nome:'', nasc:'', tel:'', valor:0, pgto:'pix',
-      diaVencimento:null, reposicoes:{saldo:0,log:[]},
-      avaliacao:{}, apelidos:[], historico:[]
-    }));
+    alunos      = a.map(r=>({id:r.id,ativo:r.ativo!==false,turmas:r.turmas||[],nome:'',nasc:'',tel:'',valor:0,pgto:'pix',diaVencimento:null,reposicoes:{saldo:0,log:[]},avaliacao:{},apelidos:[],historico:[]}));
     avisosFalta = av.map(mapAviso);
-  } catch(e){
-    console.warn('Dados públicos indisponíveis (offline ou sem permissão):', e);
-  }
+  } catch(e){ console.warn('Dados publicos indisponiveis:', e); }
 }
 
 </script>
