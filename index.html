@@ -2664,21 +2664,28 @@ async function lancarFaltaTurma(alunoId, turmaId){
   if(!a||!t) return;
   const data = turmaPanelData || today();
 
-  // Verifica se já tem lançamento hoje
   let presHoje = presencas.find(p=>p.turmaId===turmaId&&p.data===data);
   const regHoje = presHoje?.registros?.find(r=>r.alunoId===alunoId);
   if(regHoje && regHoje.status==='faltou-avisou'){
-    showToast(`${a.nome.split(' ')[0]} já tem falta com reposição hoje.`); return;
+    showToast(a.nome.split(' ')[0]+' ja tem falta registrada para este dia.'); return;
   }
-  if(!confirm(`Lançar falta para ${a.nome.split(' ')[0]} em ${fmtD(data)}?\n\n+1 reposição será adicionada ao saldo.`)) return;
 
-  // +1 reposição
+  const dataFmt = fmtD(data);
+  const fimMes = ultimoDiaMes(data);
+  if(!confirm(
+    'Lancar falta para '+a.nome.split(' ')[0]+' em '+dataFmt+'?\n\n'+
+    '+1 reposicao adicionada ao saldo\n'+
+    'Vaga aberta no calendario para reposicao\n'+
+    'Reposicao valida ate '+fimMes
+  )) return;
+
+  // +1 reposicao
   if(!a.reposicoes) a.reposicoes={saldo:0,log:[]};
   a.reposicoes.saldo+=1;
-  a.reposicoes.log.push({tipo:'credito',data,obs:`Falta em ${t.nome} — lançado pelo painel`});
+  a.reposicoes.log.push({tipo:'credito',data,obs:'Falta em '+t.nome+' ('+dataFmt+') — reposicao ate '+fimMes});
 
-  // Registra na presença
-  const novoReg={alunoId,status:'faltou-avisou',obs:'Falta lançada pelo painel da turma'};
+  // Registra presenca como faltou-avisou
+  const novoReg={alunoId,status:'faltou-avisou',obs:'Falta lancada pelo painel'};
   if(presHoje){
     presHoje.registros=presHoje.registros.filter(r=>r.alunoId!==alunoId);
     presHoje.registros.push(novoReg);
@@ -2689,16 +2696,33 @@ async function lancarFaltaTurma(alunoId, turmaId){
     await sbSalvarPresenca(novaP);
   }
 
-  // Salva aluno com novo saldo
+  // Gera aviso de falta - abre vaga no calendario para reposicao
+  const jaTemAviso = avisosFalta.find(av=>av.alunoId===alunoId&&av.turmaId===turmaId&&av.data===data);
+  if(!jaTemAviso){
+    const novoAviso={id:avisoIdC++,alunoId,turmaId,data,
+      obs:'Falta lancada - reposicao ate '+fimMes,
+      gerarCredito:false, registradoEm:today()};
+    avisosFalta.push(novoAviso);
+    await sbSalvarAviso(novoAviso);
+  }
+
   await sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes});
   salvarCacheLocal();
 
-  showToast(`✅ Falta lançada! Saldo de ${a.nome.split(' ')[0]}: ${a.reposicoes.saldo} rep.`);
+  showToast('Falta de '+a.nome.split(' ')[0]+' lancada! Saldo: '+a.reposicoes.saldo+' rep. (valida ate '+fimMes+')');
   renderTurmaPanel();
   renderWeekGrid();
   renderVagasPanel();
   renderAulasHoje();
 }
+
+function ultimoDiaMes(dataStr){
+  const parts = dataStr.split('-');
+  const y=parseInt(parts[0]), m=parseInt(parts[1]);
+  const ultimo = new Date(y, m, 0).getDate();
+  return String(ultimo).padStart(2,'0')+'/'+parts[1]+'/'+parts[0];
+}
+
 
 async function removerAlunoDaTurma(alunoId, turmaId){
   const a=alunos.find(x=>x.id===alunoId);
@@ -4705,6 +4729,52 @@ async function limparMsgEnviada(cobId){
   salvarCacheLocal();
 }
 
+
+// ===================== RESET MENSAL DE REPOSICOES =====================
+// No dia 1 de cada mes, zera o saldo de reposicoes dos alunos
+// Reposicoes nao utilizadas no mes anterior sao perdidas
+
+function verificarResetMensal(){
+  const hoje = today();
+  const [y,m,d] = hoje.split('-');
+  
+  // So executa no dia 1 do mes
+  if(d !== '01') return;
+  
+  const chaveReset = 'bt_reset_rep_' + y + '_' + m;
+  if(localStorage.getItem(chaveReset)) return; // ja executou este mes
+  
+  // Quantos alunos tem saldo para zerar
+  const comSaldo = alunos.filter(a=>a.ativo && a.reposicoes && a.reposicoes.saldo > 0);
+  if(!comSaldo.length){ localStorage.setItem(chaveReset,'1'); return; }
+  
+  // Registra o reset no log de cada aluno e zera o saldo
+  const mesAnterior = m === '01' 
+    ? (parseInt(y)-1) + '-12'
+    : y + '-' + String(parseInt(m)-1).padStart(2,'0');
+  
+  const nomeMes = mesNome(mesAnterior);
+  
+  comSaldo.forEach(a=>{
+    const saldoAnterior = a.reposicoes.saldo;
+    a.reposicoes.log.push({
+      tipo:'uso',
+      data: hoje,
+      obs: `Reset mensal: ${saldoAnterior} reposicao${saldoAnterior>1?'oes':''} de ${nomeMes} expirada${saldoAnterior>1?'s':''}`
+    });
+    a.reposicoes.saldo = 0;
+    // Salvar no Supabase em segundo plano
+    sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes}).catch(()=>{});
+  });
+  
+  localStorage.setItem(chaveReset,'1');
+  salvarCacheLocal();
+  
+  if(comSaldo.length > 0){
+    showToast('📅 Início do mês: ' + comSaldo.length + ' saldo(s) de reposição do mês anterior foram zerados.');
+  }
+}
+
 // ===================== GRÁFICOS =====================
 let chartInstances = {};
 
@@ -5728,6 +5798,7 @@ async function iniciarApp(){
     fillSel('hist-turma', true);
     fillHistAlunos();
     initDashboard();
+    verificarResetMensal();
   } catch(e){
     console.error('Erro ao inicializar UI:', e);
   }
