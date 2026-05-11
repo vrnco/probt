@@ -2108,18 +2108,7 @@ function abrirUsarRep(alunoId){
   document.getElementById('ur-obs').value='';
   openModal('modal-usar-rep');
 }
-function confirmarUsoRep(){
-  const a=alunos.find(x=>x.id===repAlunoId);
-  if(!a||!a.reposicoes||a.reposicoes.saldo<=0){alert('Sem saldo!');return;}
-  const tid=parseInt(document.getElementById('ur-turma').value);
-  const data=document.getElementById('ur-data').value;
-  const obs=document.getElementById('ur-obs').value||'Reposição realizada';
-  const tRep=turmas.find(x=>x.id===tid);
-  a.reposicoes.saldo-=1;
-  a.reposicoes.log.push({tipo:'uso',data,obs:obs+(tRep?' — '+tRep.nome:'')});
-  closeModal('modal-usar-rep');
-  renderReposicoes();
-}
+// confirmarUsoRep — versão async abaixo
 
 function abrirEditRep(alunoId){
   editRepAlunoId=alunoId;
@@ -2239,6 +2228,8 @@ async function excluirAluno(id){
   await Promise.all(turmas.map(t=>sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos})));
   salvarCacheLocal();
 }
+
+async function toggleAtivo(id){
   const a=alunos.find(x=>x.id===id); if(!a)return;
   if(a.ativo){
     const obs=prompt('Motivo para desativar (opcional):','');
@@ -2495,11 +2486,6 @@ function reativarAluno(id){
 }
 
 // ===================== TURMAS =====================
-function togDia(btn,dia){
-  btn.classList.toggle('on');
-  if(diasTurmaNew.includes(dia))diasTurmaNew=diasTurmaNew.filter(x=>x!==dia);
-  else diasTurmaNew.push(dia);
-}
 function togDia(btn,dia){
   btn.classList.toggle('on');
   if(diasTurmaNew.includes(dia))diasTurmaNew=diasTurmaNew.filter(x=>x!==dia);
@@ -5791,15 +5777,6 @@ async function testarSalvarTurma(){
 }
 
 
-function exportarDados(){
-  const dados = { turmas, alunos, presencas, cobrancas, avisosFalta, conteudos, _v:1, _saved:new Date().toISOString() };
-  const blob = new Blob([JSON.stringify(dados,null,2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'beach-tennis-backup-'+today()+'.json';
-  a.click();
-  showToast('Backup exportado!');
-}
 
 function limparCacheLocal(){
   localStorage.removeItem(CACHE_KEY);
