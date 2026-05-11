@@ -391,7 +391,7 @@ textarea{resize:vertical;min-height:60px}
   </div>
   <div id="pt-registrar">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="renderPresCards()">
+      <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="fillSelPresenca(false);renderPresCards()">
       <select id="pres-turma" onchange="renderPresCards()" style="flex:2;min-width:160px"></select>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--muted)">
@@ -1898,7 +1898,40 @@ function initPresenca(){
 }
 function fillSel(id, comTodos){
   const s=document.getElementById(id); if(!s)return;
-  s.innerHTML=(comTodos?'<option value="">Todas turmas</option>':'')+turmas.map(t=>`<option value="${t.id}">${t.hora} — ${t.nome}</option>`).join('');
+  // Para o select de turma da presença, filtra pelo dia da data selecionada
+  if(id==='pres-turma'){
+    fillSelPresenca(comTodos);
+    return;
+  }
+  s.innerHTML=(comTodos?'<option value="">Todas turmas</option>':'')+
+    turmas.map(t=>`<option value="${t.id}">${t.hora} — ${t.nome}</option>`).join('');
+}
+
+function fillSelPresenca(comTodos){
+  const s = document.getElementById('pres-turma'); if(!s) return;
+  const dataEl = document.getElementById('pres-data');
+  const data = dataEl ? dataEl.value : today();
+  
+  // Descobre o dia da semana da data selecionada
+  let turmasFiltradas = turmas;
+  if(data){
+    const dow = DIAS_SEMANA[new Date(data+'T12:00').getDay()];
+    turmasFiltradas = turmas.filter(t => t.dias && t.dias.includes(dow))
+                           .sort((a,b) => a.hora.localeCompare(b.hora));
+  }
+  
+  const valorAtual = s.value;
+  s.innerHTML = (comTodos ? '<option value="">Todas turmas</option>' : '') +
+    (turmasFiltradas.length
+      ? turmasFiltradas.map(t=>`<option value="${t.id}">${t.hora} — ${t.nome}</option>`).join('')
+      : '<option value="" disabled>Nenhuma turma neste dia</option>');
+  
+  // Mantém seleção anterior se ainda disponível
+  if(valorAtual && turmasFiltradas.find(t=>String(t.id)===valorAtual)){
+    s.value = valorAtual;
+  } else if(turmasFiltradas.length){
+    s.value = turmasFiltradas[0].id;
+  }
 }
 function fillHistAlunos(){
   const s=document.getElementById('hist-aluno'); if(!s)return;
