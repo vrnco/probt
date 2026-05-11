@@ -2629,20 +2629,75 @@ function renderTurmaPanel(){
   document.getElementById('tp-alunos-lista').innerHTML=
     (alunosTurma.length+inativos.length===0
       ?'<div class="empty">Nenhum aluno nesta turma</div>'
-      :[...alunosTurma,...inativos].map(a=>`
+      :[...alunosTurma,...inativos].map(a=>{
+        // Saldo de reposições atual
+        const saldo = a.reposicoes?.saldo||0;
+        // Data de hoje para verificar se já tem falta registrada hoje
+        const presHoje = presencas.find(p=>p.turmaId===t.id&&p.data===turmaPanelData);
+        const regHoje  = presHoje?.registros?.find(r=>r.alunoId===a.id);
+        const statusHoje = regHoje?.status||null;
+        return`
         <div class="tp-aluno-row">
           ${fotoEl(a,'avatar')}
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600">${a.nome} ${!a.ativo?'<span class="tag-inativo">inativo</span>':''}</div>
             <div style="font-size:11px;color:var(--muted)">${calcIdade(a.nasc)} anos · ${pgtoLabel(a.pgto)} · dia ${a.diaVencimento||'?'}</div>
-            ${a.reposicoes&&a.reposicoes.saldo>0?`<span class="badge b-blue" style="font-size:10px">${a.reposicoes.saldo} rep.</span>`:''}
+            <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap">
+              ${saldo>0?`<span class="badge b-blue" style="font-size:10px">${saldo} rep.</span>`:''}
+              ${statusHoje?`<span class="badge ${{'presente':'b-green','faltou':'b-red','faltou-avisou':'b-amber','reposicao':'b-purple','antecipacao':'b-blue'}[statusHoje]||'b-gray'}" style="font-size:10px">${statusLabel(statusHoje)}</span>`:''}
+            </div>
           </div>
-          <div style="display:flex;gap:5px;flex-shrink:0">
+          <div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-xs" onclick="verAluno(${a.id})">Ver</button>
+            ${a.ativo?`<button class="btn btn-xs" style="background:#fff3e0;color:#e65100;border-color:#ffcc80;font-size:11px" onclick="lancarFaltaTurma(${a.id},${t.id})">Falta +1rep</button>`:''}
             <button class="btn btn-xs btn-danger" onclick="removerAlunoDaTurma(${a.id},${t.id})">Remover</button>
           </div>
-        </div>`).join('')
+        </div>`;
+      }).join('')
     );
+}
+
+
+async function lancarFaltaTurma(alunoId, turmaId){
+  const a = alunos.find(x=>x.id===alunoId);
+  const t = turmas.find(x=>x.id===turmaId);
+  if(!a||!t) return;
+  const data = turmaPanelData || today();
+
+  // Verifica se já tem lançamento hoje
+  let presHoje = presencas.find(p=>p.turmaId===turmaId&&p.data===data);
+  const regHoje = presHoje?.registros?.find(r=>r.alunoId===alunoId);
+  if(regHoje && regHoje.status==='faltou-avisou'){
+    showToast(`${a.nome.split(' ')[0]} já tem falta com reposição hoje.`); return;
+  }
+  if(!confirm(`Lançar falta para ${a.nome.split(' ')[0]} em ${fmtD(data)}?\n\n+1 reposição será adicionada ao saldo.`)) return;
+
+  // +1 reposição
+  if(!a.reposicoes) a.reposicoes={saldo:0,log:[]};
+  a.reposicoes.saldo+=1;
+  a.reposicoes.log.push({tipo:'credito',data,obs:`Falta em ${t.nome} — lançado pelo painel`});
+
+  // Registra na presença
+  const novoReg={alunoId,status:'faltou-avisou',obs:'Falta lançada pelo painel da turma'};
+  if(presHoje){
+    presHoje.registros=presHoje.registros.filter(r=>r.alunoId!==alunoId);
+    presHoje.registros.push(novoReg);
+    await sbSalvarPresenca(presHoje);
+  } else {
+    const novaP={id:presIdC++,turmaId,data,registros:[novoReg]};
+    presencas.push(novaP);
+    await sbSalvarPresenca(novaP);
+  }
+
+  // Salva aluno com novo saldo
+  await sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes});
+  salvarCacheLocal();
+
+  showToast(`✅ Falta lançada! Saldo de ${a.nome.split(' ')[0]}: ${a.reposicoes.saldo} rep.`);
+  renderTurmaPanel();
+  renderWeekGrid();
+  renderVagasPanel();
+  renderAulasHoje();
 }
 
 async function removerAlunoDaTurma(alunoId, turmaId){
