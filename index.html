@@ -3965,8 +3965,8 @@ function cfgAddCatTurma(){
 
 function salvarCatTurmas(){
   atualizarSelectCategoria();
-  sbSalvarConfig('cfgCatTurmas', cfgCatTurmas);
   salvarCacheLocal();
+  sbSalvarConfig('cfgCatTurmas', cfgCatTurmas);
   showToast('Categorias de turma salvas! ✅');
 }
 
@@ -4038,8 +4038,8 @@ function cfgRemoveItem(gi, ii){
 function salvarAvCategorias(){
   AV_CATEGORIAS.length = 0;
   cfgAvCategorias.forEach(g=>AV_CATEGORIAS.push(JSON.parse(JSON.stringify(g))));
-  sbSalvarConfig('cfgAvCategorias', cfgAvCategorias);
   salvarCacheLocal();
+  sbSalvarConfig('cfgAvCategorias', cfgAvCategorias);
   showToast('Avaliação técnica atualizada! ✅');
 }
 
@@ -4066,8 +4066,8 @@ function salvarCategorias(){
       `<button type="button" class="dia-btn" onclick="set${pid==='cat-inicio-btns'?'CatInicio':'CatAtual'}('${cat}')">${cat}</button>`
     ).join('');
   });
-  sbSalvarConfig('cfgCategorias', cfgCategorias);
   salvarCacheLocal();
+  sbSalvarConfig('cfgCategorias', cfgCategorias);
   showToast('Categorias salvas! ✅');
 }
 
@@ -4092,8 +4092,8 @@ function salvarGolpes(){
   const cur = sel.value;
   sel.innerHTML = '<option value="">— Selecione —</option>'+
     cfgGolpesPlano.map(g=>`<option ${g===cur?'selected':''}>${g}</option>`).join('');
-  sbSalvarConfig('cfgGolpesPlano', cfgGolpesPlano);
   salvarCacheLocal();
+  sbSalvarConfig('cfgGolpesPlano', cfgGolpesPlano);
   showToast('Golpes salvos! ✅');
 }
 
@@ -4118,8 +4118,8 @@ function salvarPadroesTurma(){
   cfgPadroesTurma.mens      = parseFloat(document.getElementById('cfg-padrao-mens').value)||180;
   cfgPadroesTurma.cor       = document.getElementById('cfg-padrao-cor').value||'#e91e8c';
   cfgPadroesTurma.categoria = document.getElementById('cfg-padrao-categoria').value||cfgCatTurmas[0]?.nome||'Misto';
-  sbSalvarConfig('cfgPadroesTurma', cfgPadroesTurma);
   salvarCacheLocal();
+  sbSalvarConfig('cfgPadroesTurma', cfgPadroesTurma);
   showToast('Padrões de turma salvos! ✅');
 }
 
@@ -4147,8 +4147,8 @@ function salvarPgtos(){
   const sel = document.getElementById('a-pgto'); if(!sel) return;
   const cur = sel.value;
   sel.innerHTML = cfgPgtos.map(p=>`<option value="${p.toLowerCase()}" ${p.toLowerCase()===cur?'selected':''}>${p}</option>`).join('');
-  sbSalvarConfig('cfgPgtos', cfgPgtos);
   salvarCacheLocal();
+  sbSalvarConfig('cfgPgtos', cfgPgtos);
   showToast('Formas de pagamento salvas! ✅');
 }
 function salvarInfoSistema(){
@@ -4156,9 +4156,13 @@ function salvarInfoSistema(){
   cfgInfoSistema.tel    = (document.getElementById('cfg-tel-academia')||{}).value||'';
   cfgInfoSistema.watel  = (document.getElementById('cfg-watel-academia')||{}).value||'';
   cfgInfoSistema.cidade = (document.getElementById('cfg-cidade')||{}).value||'';
-  sbSalvarConfig('cfgInfoSistema', cfgInfoSistema);
+  // Salva sempre no cache local primeiro (garante persistência mesmo sem tabela no Supabase)
   salvarCacheLocal();
-  showToast('Informações salvas! ✅');
+  // Tenta salvar no Supabase também
+  sbSalvarConfig('cfgInfoSistema', cfgInfoSistema).then(ok=>{
+    if(ok) showToast('✅ Informações salvas no banco!');
+    else   showToast('✅ Informações salvas localmente! (Execute o SQL setup_configs.sql no Supabase para salvar na nuvem)');
+  });
 }
 
 // ---------- EXPORT ----------
@@ -4265,8 +4269,8 @@ function salvarMsgWA(){
   if(mc) waCfg.msgCobranca    = mc.value;
   if(mf) waCfg.msgConfirmacao = mf.value;
   if(mb) waCfg.msgBoasvindas  = mb.value;
-  sbSalvarConfig('waCfg', waCfg);
   salvarCacheLocal();
+  sbSalvarConfig('waCfg', waCfg);
   showToast('Mensagens salvas! ✅');
 }
 
@@ -5364,12 +5368,21 @@ async function carregarTudo(){
 // ---- Salvar config individual no Supabase ----
 async function sbSalvarConfig(chave, valor){
   try {
-    await fetch(`${SB_URL}/rest/v1/configuracoes`, {
+    const r = await fetch(`${SB_URL}/rest/v1/configuracoes`, {
       method:'POST',
       headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),
       body: JSON.stringify({chave, valor, updated_at: new Date().toISOString()})
     });
-  } catch(e){ console.warn('Erro ao salvar config:', chave, e); }
+    if(!r.ok){
+      const err = await r.text();
+      console.warn('sbSalvarConfig falhou:', r.status, err);
+      return false;
+    }
+    return true;
+  } catch(e){
+    console.warn('Erro ao salvar config:', chave, e);
+    return false;
+  }
 }
 
 // ---- Carregar todas as configs do Supabase ----
