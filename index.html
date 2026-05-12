@@ -1275,7 +1275,7 @@ textarea{resize:vertical;min-height:60px}
     <!-- Campos financeiros (escondidos quando patrocinado) -->
     <div id="campos-financeiros">
     <div class="form-row">
-      <div><label>Valor mensal (R$)</label><input type="number" id="a-valor" placeholder="200"></div>
+      <div><label>Valor mensal (R$)</label><input type="number" id="a-valor" placeholder="180"></div>
       <div><label>Início das aulas</label><input type="date" id="a-inicio"></div>
     </div>
     <div class="form-row">
@@ -2360,6 +2360,9 @@ function abrirNovoAluno(){
   limparFormAluno();
   document.getElementById('modal-aluno-title').textContent='Novo aluno';
   renderTurmaChecks([]);
+  // Pré-preenche com valor padrão configurado em Padrões de Nova Turma
+  const valorPadrao = cfgPadroesTurma?.mens||180;
+  document.getElementById('a-valor').value = valorPadrao;
   openModal('modal-aluno');
 }
 function editarAluno(id){
@@ -2440,7 +2443,7 @@ async function salvarAluno(){
   if(!nome){alert('Informe o nome');return;}
   const nasc=document.getElementById('a-nasc').value;
   const tel=document.getElementById('a-tel').value.trim();
-  const valor=parseFloat(document.getElementById('a-valor').value)||200;
+  const valor=parseFloat(document.getElementById('a-valor').value)||(cfgPadroesTurma?.mens||180);
   const pgto=document.getElementById('a-pgto').value;
   const inicio=document.getElementById('a-inicio').value;
   const obs=document.getElementById('a-obs').value.trim();
@@ -5448,6 +5451,11 @@ async function carregarTudo(){
 
 // ---- Salvar config individual no Supabase ----
 async function sbSalvarConfig(chave, valor){
+  // Garante token valido antes de escrever
+  if(!tokenValido()){
+    const ok = await tentarRefreshSessao();
+    if(!ok){ console.warn('sbSalvarConfig: sem sessao para', chave); return false; }
+  }
   try {
     const r = await fetch(`${SB_URL}/rest/v1/configuracoes`, {
       method:'POST',
@@ -5456,12 +5464,13 @@ async function sbSalvarConfig(chave, valor){
     });
     if(!r.ok){
       const err = await r.text();
-      console.warn('sbSalvarConfig falhou:', r.status, err);
+      console.warn('sbSalvarConfig erro', r.status, err);
+      if(r.status===404) console.warn('TABELA configuracoes NAO EXISTE — execute setup_configs.sql');
       return false;
     }
     return true;
   } catch(e){
-    console.warn('Erro ao salvar config:', chave, e);
+    console.warn('sbSalvarConfig excecao:', chave, e.message);
     return false;
   }
 }
@@ -5588,7 +5597,7 @@ async function sbSalvarAluno(a){
     patrocinado:a.patrocinado||false, patrocinador:a.patrocinador||null, obs:a.obs||null,
     aulas_semana:a.aulasSemana||1, camisa:a.camisa||null, cat_inicio:a.catInicio||null,
     cat_atual:a.catAtual||null, data_cat_inicio:a.dataCatInicio||null,
-    dia_vencimento:a.diaVencimento||null, valor:a.valor||200, pgto:a.pgto||'pix',
+    dia_vencimento:a.diaVencimento||null, valor:a.valor||180, pgto:a.pgto||'pix',
     apelidos:a.apelidos||[], historico:a.historico||[],
     reposicoes:a.reposicoes||{saldo:0,log:[]}, avaliacao:a.avaliacao||{},
     ultima_avaliacao:a.ultimaAvaliacao||null
