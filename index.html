@@ -1672,9 +1672,11 @@ function goPage(p, btn){
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
   const pg = document.getElementById('pg-'+p);
   if(pg){ pg.style.display=''; pg.classList.add('active'); }
-  if(btn)btn.classList.add('active');
+  if(btn) btn.classList.add('active');
+  // Volta ao topo da página ao trocar de aba
+  window.scrollTo({top: 0, behavior: 'instant'});
   const map={dashboard:initDashboard,presenca:initPresenca,alunos:renderAlunos,financeiro:initFin,plano:initPlano,config:initConfig};
-  if(map[p])map[p]();
+  if(map[p]) map[p]();
 }
 
 function switchTab(ns, tab, btn){
