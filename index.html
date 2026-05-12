@@ -1137,6 +1137,33 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- Modal Lançar Falta com Justificativa -->
+<div id="modal-lancar-falta" class="modal-bg">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">📋 Lançar falta</div>
+    <button class="modal-close" onclick="closeModal('modal-lancar-falta')">×</button>
+    <div id="lfalta-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
+    <label>Justificativa <span style="color:var(--muted);font-size:11px">(opcional)</span></label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button type="button" class="dia-btn" onclick="setJustFalta(this,'Compromisso pessoal')">Compromisso</button>
+      <button type="button" class="dia-btn" onclick="setJustFalta(this,'Viagem')">Viagem</button>
+      <button type="button" class="dia-btn" onclick="setJustFalta(this,'Saúde / médico')">Saúde</button>
+      <button type="button" class="dia-btn" onclick="setJustFalta(this,'Trabalho')">Trabalho</button>
+      <button type="button" class="dia-btn" onclick="setJustFalta(this,'Sem justificativa')">Sem just.</button>
+    </div>
+    <input type="text" id="lfalta-obs" placeholder="Ou escreva o motivo...">
+    <div style="background:#fff8e1;border-radius:8px;padding:8px 12px;font-size:12px;color:#856404;margin-top:10px">
+      ✅ +1 reposição adicionada ao saldo<br>
+      📅 Vaga aberta no calendário para reposição<br>
+      <span id="lfalta-validade" style="color:#e65100;font-weight:600;display:block;margin-top:2px"></span>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeModal('modal-lancar-falta')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmarLancFalta()">✅ Confirmar falta</button>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">×</button>
@@ -1713,19 +1740,31 @@ function renderWeekGrid(){
         const vagasReais = (t.vagas - at.length) + avisosD.length + antecip;
         const semAlunos  = at.length === 0;
 
+        // Quem está fazendo reposição neste slot neste dia
+        const repNames = presD
+          ? presD.registros
+              .filter(r=>r.status==='reposicao')
+              .map(r=>{ const a=alunos.find(x=>x.id===r.alunoId); return a?a.nome.split(' ')[0]:null; })
+              .filter(Boolean)
+          : [];
+
         // Cores dos slots
         let slotBg, slotBorder, slotColor;
         if(semAlunos){
-          slotBg='#e3f2fd'; slotBorder='#1a6fbd'; slotColor='#0d47a1'; // azul — nova
+          slotBg='#e3f2fd'; slotBorder='#1a6fbd'; slotColor='#0d47a1';
         } else if(vagasReais <= 0){
-          slotBg='#fceaea'; slotBorder='#e53935'; slotColor='#b02020'; // vermelho — cheio
+          slotBg='#fceaea'; slotBorder='#e53935'; slotColor='#b02020';
         } else {
-          slotBg='#fff8e1'; slotBorder='#ffc107'; slotColor='#856404'; // amarelo — com vaga
+          slotBg='#fff8e1'; slotBorder='#ffc107'; slotColor='#856404';
         }
 
         const vagasBadge = avisosD.length
           ? `<span class="week-vaga-badge">🔔 ${avisosD.length} vaga${avisosD.length>1?'s':''}</span>`
           : antecip ? `<span class="week-vaga-badge" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7">⚡ vaga antecip.</span>` : '';
+
+        const repBadge = repNames.length
+          ? `<span style="display:block;font-size:9px;background:#e8f5e9;color:#2e7d32;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">↩ ${repNames.join(', ')}</span>`
+          : '';
 
         return`<button class="week-slot"
           style="background:${slotBg};border-color:${slotBorder};color:${slotColor}"
@@ -1733,7 +1772,7 @@ function renderWeekGrid(){
           <strong style="font-size:12px">${t.hora}</strong>
           <span style="display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
           <span style="font-size:10px">${at.length}/${t.vagas}</span>
-          ${vagasBadge}
+          ${vagasBadge}${repBadge}
         </button>`;
       }).join('')}
       <button class="week-slot-add" onclick="abrirNovaTurmaComDia('${dow}')">+ horário</button>
@@ -1840,6 +1879,14 @@ function renderAulasHoje(){
     const vagasReais  = (t.vagas - alunosTurma.length) + avisosHoje.length + antecipados.length;
     const semAlunos   = alunosTurma.length === 0;
 
+    // Quem está repondo hoje nesta turma
+    const repondoHoje = presD
+      ? presD.registros
+          .filter(r=>r.status==='reposicao')
+          .map(r=>{ const a=alunos.find(x=>x.id===r.alunoId); return a?a.nome.split(' ')[0]:null; })
+          .filter(Boolean)
+      : [];
+
     // Sistema de cores
     let bgCard, borderCard, statusInfo, statusCor;
     if(semAlunos){
@@ -1866,6 +1913,7 @@ function renderAulasHoje(){
       </div>
       <div style="font-size:11px;font-weight:600;color:${statusCor};margin-bottom:6px">${statusInfo}
         ${avisosHoje.length?` · 🔔 ${avisosHoje.length} falta avisada`:''}
+        ${repondoHoje.length?`<span style="display:inline-block;background:#e8f5e9;color:#2e7d32;border-radius:5px;padding:1px 7px;font-size:11px;margin-left:4px">↩ ${repondoHoje.join(', ')}</span>`:''}
       </div>
       <div>${alunosTurma.map(a=>{
         const temAviso = avisosHoje.some(av=>av.alunoId===a.id);
@@ -2691,34 +2739,53 @@ function renderTurmaPanel(){
 }
 
 
-async function lancarFaltaTurma(alunoId, turmaId){
-  const a = alunos.find(x=>x.id===alunoId);
-  const t = turmas.find(x=>x.id===turmaId);
-  if(!a||!t) return;
-  const data = turmaPanelData || today();
+let _faltaAlunoId=null, _faltaTurmaId=null;
 
-  let presHoje = presencas.find(p=>p.turmaId===turmaId&&p.data===data);
-  const regHoje = presHoje?.registros?.find(r=>r.alunoId===alunoId);
-  if(regHoje && regHoje.status==='faltou-avisou'){
-    showToast(a.nome.split(' ')[0]+' ja tem falta registrada para este dia.'); return;
+function lancarFaltaTurma(alunoId, turmaId){
+  const a=alunos.find(x=>x.id===alunoId);
+  const t=turmas.find(x=>x.id===turmaId);
+  if(!a||!t)return;
+  const data=turmaPanelData||today();
+  const presHoje=presencas.find(p=>p.turmaId===turmaId&&p.data===data);
+  const regHoje=presHoje?.registros?.find(r=>r.alunoId===alunoId);
+  if(regHoje&&regHoje.status==='faltou-avisou'){
+    showToast(a.nome.split(' ')[0]+' já tem falta registrada neste dia.'); return;
   }
+  _faltaAlunoId=alunoId; _faltaTurmaId=turmaId;
+  const fimMes=ultimoDiaMes(data);
+  document.getElementById('lfalta-info').innerHTML=
+    '<strong>'+a.nome+'</strong><br>'+
+    '<span style="font-size:11px;color:var(--muted)">'+t.hora+' — '+t.nome+' · '+fmtD(data)+'</span>';
+  document.getElementById('lfalta-obs').value='';
+  document.getElementById('lfalta-validade').textContent='⚠️ Reposição válida até '+fimMes;
+  document.querySelectorAll('#modal-lancar-falta .dia-btn').forEach(b=>b.classList.remove('on'));
+  openModal('modal-lancar-falta');
+  setTimeout(()=>document.getElementById('lfalta-obs').focus(),150);
+}
 
-  const dataFmt = fmtD(data);
-  const fimMes = ultimoDiaMes(data);
-  if(!confirm(
-    'Lancar falta para '+a.nome.split(' ')[0]+' em '+dataFmt+'?\n\n'+
-    '+1 reposicao adicionada ao saldo\n'+
-    'Vaga aberta no calendario para reposicao\n'+
-    'Reposicao valida ate '+fimMes
-  )) return;
+function setJustFalta(btn, texto){
+  document.getElementById('lfalta-obs').value=texto;
+  document.querySelectorAll('#modal-lancar-falta .dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
 
-  // +1 reposicao
-  if(!a.reposicoes) a.reposicoes={saldo:0,log:[]};
+async function confirmarLancFalta(){
+  const alunoId=_faltaAlunoId, turmaId=_faltaTurmaId;
+  const a=alunos.find(x=>x.id===alunoId);
+  const t=turmas.find(x=>x.id===turmaId);
+  if(!a||!t)return;
+  const data=turmaPanelData||today();
+  const obs=(document.getElementById('lfalta-obs').value||'Falta lançada pelo painel').trim();
+  const fimMes=ultimoDiaMes(data);
+
+  // +1 reposição
+  if(!a.reposicoes)a.reposicoes={saldo:0,log:[]};
   a.reposicoes.saldo+=1;
-  a.reposicoes.log.push({tipo:'credito',data,obs:'Falta em '+t.nome+' ('+dataFmt+') — reposicao ate '+fimMes});
+  a.reposicoes.log.push({tipo:'credito',data,obs:obs+' (Falta em '+t.nome+' — rep. até '+fimMes+')'});
 
-  // Registra presenca como faltou-avisou
-  const novoReg={alunoId,status:'faltou-avisou',obs:'Falta lancada pelo painel'};
+  // Presença como faltou-avisou
+  let presHoje=presencas.find(p=>p.turmaId===turmaId&&p.data===data);
+  const novoReg={alunoId,status:'faltou-avisou',obs};
   if(presHoje){
     presHoje.registros=presHoje.registros.filter(r=>r.alunoId!==alunoId);
     presHoje.registros.push(novoReg);
@@ -2729,25 +2796,22 @@ async function lancarFaltaTurma(alunoId, turmaId){
     await sbSalvarPresenca(novaP);
   }
 
-  // Gera aviso de falta - abre vaga no calendario para reposicao
-  const jaTemAviso = avisosFalta.find(av=>av.alunoId===alunoId&&av.turmaId===turmaId&&av.data===data);
+  // Aviso de falta → abre vaga no calendário
+  const jaTemAviso=avisosFalta.find(av=>av.alunoId===alunoId&&av.turmaId===turmaId&&av.data===data);
   if(!jaTemAviso){
-    const novoAviso={id:avisoIdC++,alunoId,turmaId,data,
-      obs:'Falta lancada - reposicao ate '+fimMes,
-      gerarCredito:false, registradoEm:today()};
-    avisosFalta.push(novoAviso);
-    await sbSalvarAviso(novoAviso);
+    const av={id:avisoIdC++,alunoId,turmaId,data,
+      obs:obs+' — rep. até '+fimMes,gerarCredito:false,registradoEm:today()};
+    avisosFalta.push(av);
+    await sbSalvarAviso(av);
   }
 
-  await sbPatch('alunos', a._sbId||a.id, {reposicoes:a.reposicoes});
+  await sbPatch('alunos',a._sbId||a.id,{reposicoes:a.reposicoes});
   salvarCacheLocal();
-
-  showToast('Falta de '+a.nome.split(' ')[0]+' lancada! Saldo: '+a.reposicoes.saldo+' rep. (valida ate '+fimMes+')');
-  renderTurmaPanel();
-  renderWeekGrid();
-  renderVagasPanel();
-  renderAulasHoje();
+  closeModal('modal-lancar-falta');
+  showToast('Falta de '+a.nome.split(' ')[0]+' lançada! Saldo: '+a.reposicoes.saldo+' rep. (até '+fimMes+')');
+  renderTurmaPanel(); renderWeekGrid(); renderVagasPanel(); renderAulasHoje();
 }
+
 
 function ultimoDiaMes(dataStr){
   const parts = dataStr.split('-');
@@ -2894,23 +2958,40 @@ function renderTurmaReposicao(){
     :'<div style="font-size:13px;color:var(--muted);margin-top:12px">Nenhuma reposição registrada nesta turma</div>';
 }
 
-function registrarReposicaoNaTurma(){
+async function registrarReposicaoNaTurma(){
   const alunoId=parseInt(document.getElementById('tp-rep-aluno').value);
   const data=document.getElementById('tp-rep-data').value;
   if(!alunoId||!data){showToast('Selecione o aluno e a data.');return;}
   const a=alunos.find(x=>x.id===alunoId); if(!a)return;
-  if(!a.reposicoes||a.reposicoes.saldo<=0){alert('Aluno sem saldo de reposição.');return;}
+  if(!a.reposicoes||a.reposicoes.saldo<=0){showToast('Aluno sem saldo de reposição.');return;}
+  const t=turmas.find(x=>x.id===turmaPanelId);
+
   // Desconta saldo
   a.reposicoes.saldo-=1;
-  const t=turmas.find(x=>x.id===turmaPanelId);
-  const obs=`Repôs em ${t?t.nome:''} ${t?'('+t.hora+')':''}`;
+  const obs='Repôs em '+(t?t.nome:'')+(t?' ('+t.hora+')':'');
   a.reposicoes.log.push({tipo:'uso',data,obs});
-  // Registra como presença
-  const key=turmaPanelId+'_'+data;
-  if(!presTemp[key])presTemp[key]={};
-  presTemp[key][alunoId]={status:'reposicao',obs};
-  showToast(a.nome.split(' ')[0]+' — reposição registrada! Saldo: '+a.reposicoes.saldo);
+
+  // Registra como presença no banco (não só presTemp)
+  let presD = presencas.find(p=>p.turmaId===turmaPanelId&&p.data===data);
+  const novoReg={alunoId,status:'reposicao',obs};
+  if(presD){
+    presD.registros=presD.registros.filter(r=>r.alunoId!==alunoId);
+    presD.registros.push(novoReg);
+    await sbSalvarPresenca(presD);
+  } else {
+    const novaP={id:presIdC++,turmaId:turmaPanelId,data,registros:[novoReg]};
+    presencas.push(novaP);
+    await sbSalvarPresenca(novaP);
+  }
+
+  await sbPatch('alunos',a._sbId||a.id,{reposicoes:a.reposicoes});
+  salvarCacheLocal();
+
+  showToast('↩ '+a.nome.split(' ')[0]+' — reposição registrada! Saldo: '+a.reposicoes.saldo);
   renderTurmaReposicao();
+  // Atualiza calendário para mostrar o nome na slot
+  renderWeekGrid();
+  renderAulasHoje();
 }
 
 // ---- Aba Info ----
