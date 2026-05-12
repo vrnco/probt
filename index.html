@@ -5437,8 +5437,8 @@ async function carregarTudo(){
   // COM INTERNET — sempre busca do Supabase (fonte verdadeira)
   mostrarLoadingGlobal(true);
   try {
-    await buscarDoSupabase();
-    salvarCacheLocal(); // atualiza cache para uso offline
+    await buscarDoSupabase(); // já inclui carregarConfigsDoSupabase()
+    salvarCacheLocal(); // atualiza cache DEPOIS de carregar configs
   } catch(e){
     console.error('Erro ao carregar do Supabase:', e);
     // Fallback: tenta cache local
@@ -5478,19 +5478,27 @@ async function sbSalvarConfig(chave, valor){
 // ---- Carregar todas as configs do Supabase ----
 async function carregarConfigsDoSupabase(){
   try {
-    const rows = await sbGet('configuracoes', 'select=chave,valor');
-    rows.forEach(r=>{
-      const v = r.valor;
-      if(r.chave==='cfgInfoSistema'  && v) cfgInfoSistema  = {...cfgInfoSistema,  ...v};
-      if(r.chave==='cfgPgtos'        && v) cfgPgtos        = v;
-      if(r.chave==='cfgGolpesPlano'  && v) cfgGolpesPlano  = v;
-      if(r.chave==='cfgCategorias'   && v) cfgCategorias   = v;
-      if(r.chave==='cfgCatTurmas'    && v) cfgCatTurmas    = v;
-      if(r.chave==='cfgPadroesTurma' && v) cfgPadroesTurma = {...cfgPadroesTurma, ...v};
-      if(r.chave==='waCfg'           && v) waCfg           = {...waCfg, ...v};
-      if(r.chave==='cfgAvCategorias' && v){ cfgAvCategorias = v; AV_CATEGORIAS.length=0; v.forEach(g=>AV_CATEGORIAS.push(g)); }
+    // Usa o token autenticado para ler configuracoes (RLS exige auth)
+    const r = await fetch(`${SB_URL}/rest/v1/configuracoes?select=chave,valor`, {
+      headers: sbHeaders()
     });
-  } catch(e){ console.warn('Configs não carregadas (tabela não existe ainda?):', e); }
+    if(!r.ok){ console.warn('configuracoes: HTTP', r.status, '— tabela existe?'); return; }
+    const rows = await r.json();
+    if(!rows.length){ console.log('configuracoes: tabela vazia'); return; }
+    rows.forEach(row=>{
+      const v = row.valor;
+      if(!v) return;
+      if(row.chave==='cfgInfoSistema')  cfgInfoSistema  = {...cfgInfoSistema,  ...v};
+      if(row.chave==='cfgPgtos')        cfgPgtos        = v;
+      if(row.chave==='cfgGolpesPlano')  cfgGolpesPlano  = v;
+      if(row.chave==='cfgCategorias')   cfgCategorias   = v;
+      if(row.chave==='cfgCatTurmas')    cfgCatTurmas    = v;
+      if(row.chave==='cfgPadroesTurma') cfgPadroesTurma = {...cfgPadroesTurma, ...v};
+      if(row.chave==='waCfg')           waCfg           = {...waCfg, ...v};
+      if(row.chave==='cfgAvCategorias'){ cfgAvCategorias=v; AV_CATEGORIAS.length=0; v.forEach(g=>AV_CATEGORIAS.push(g)); }
+    });
+    console.log('✅ Configs carregadas do Supabase:', rows.map(r=>r.chave).join(', '));
+  } catch(e){ console.warn('Configs não carregadas:', e.message); }
 }
 
 async function buscarDoSupabase(){
