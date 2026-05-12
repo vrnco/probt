@@ -970,6 +970,7 @@ textarea{resize:vertical;min-height:60px}
     <div class="card" style="padding:16px">
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">Dados do sistema</div>
       <div id="cfg-storage-info" style="font-size:13px;color:var(--muted);margin-bottom:12px">Calculando...</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Versão do sistema: <strong id="cfg-app-version">—</strong></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         <button class="btn btn-sm" onclick="exportarDados()">📥 Exportar backup (JSON)</button>
         <button class="btn btn-sm btn-primary" onclick="limparCacheLocal()">🔄 Limpar cache local</button>
@@ -5559,51 +5560,34 @@ async function sbSalvarConfig(chave, valor){
 async function sbUpsertConfig(chave, valor){
   // Garante token válido
   if(!tokenValido()){
-    console.log('Token expirado, renovando...');
-    const ok = await tentarRefreshSessao();
-    if(!ok){
-      console.warn('Sem sessão válida para salvar config:', chave);
-      return false;
-    }
+    await tentarRefreshSessao();
   }
   try {
-    const payload = JSON.stringify({chave, valor, updated_at: new Date().toISOString()});
-    const headers = sbHeaders({'Prefer': 'return=minimal'});
-
-    // Tenta PATCH primeiro (atualizar linha existente)
-    const rPatch = await fetch(
+    // PATCH na linha existente (todas as chaves já foram criadas pelo SQL)
+    const r = await fetch(
       `${SB_URL}/rest/v1/configuracoes?chave=eq.${encodeURIComponent(chave)}`,
-      { method: 'PATCH', headers, body: JSON.stringify({valor, updated_at: new Date().toISOString()}) }
-    );
-
-    if(rPatch.ok){
-      // 204 No Content = linha atualizada com sucesso
-      // content-range "*/0" significa que não havia linha para atualizar
-      const range = rPatch.headers.get('content-range') || '';
-      const semLinha = range === '*/0';
-      if(!semLinha){
-        console.log('✅ Config atualizada (PATCH):', chave);
-        return true;
+      {
+        method: 'PATCH',
+        headers: sbHeaders({'Prefer': 'return=minimal'}),
+        body: JSON.stringify({valor, updated_at: new Date().toISOString()})
       }
-      // Não tinha linha ainda — vai inserir abaixo
-    }
-
-    // Inserir nova linha
-    const rPost = await fetch(`${SB_URL}/rest/v1/configuracoes`, {
-      method: 'POST',
-      headers: sbHeaders({'Prefer': 'return=minimal'}),
-      body: payload
-    });
-
-    if(rPost.ok){
-      console.log('✅ Config inserida (POST):', chave);
+    );
+    if(r.ok){
+      console.log('✅ Config salva:', chave);
       return true;
     }
-
-    const errTxt = await rPost.text();
-    console.warn('sbUpsertConfig POST falhou:', rPost.status, errTxt.substring(0,200));
+    const err = await r.text();
+    console.warn('sbUpsertConfig falhou:', r.status, err.substring(0,150));
+    // Se linha não existe ainda, tenta INSERT
+    if(r.status === 404 || err.includes('0 rows')){
+      const r2 = await fetch(`${SB_URL}/rest/v1/configuracoes`, {
+        method: 'POST',
+        headers: sbHeaders({'Prefer': 'return=minimal'}),
+        body: JSON.stringify({chave, valor, updated_at: new Date().toISOString()})
+      });
+      if(r2.ok){ console.log('✅ Config inserida:', chave); return true; }
+    }
     return false;
-
   } catch(e){
     console.warn('sbUpsertConfig excecao:', e.message);
     return false;
@@ -6095,6 +6079,8 @@ async function iniciarApp(){
 
   // 7. Info na aba config
   setTimeout(()=>{
+    const vEl = document.getElementById('cfg-app-version');
+    if(vEl) vEl.textContent = APP_VERSION;
     const el = document.getElementById('cfg-storage-info');
     if(el) el.innerHTML = estaOnline()
       ? `☁️ Conectado ao <strong>Supabase</strong> · ${alunos.length} alunos · ${turmas.length} turmas`
@@ -6218,7 +6204,7 @@ function importarBackup(){ showToast('Para restaurar um backup, use o painel do 
 
 // ===================== PWA =====================
 // VERSÃO — altere este número a cada novo deploy para forçar atualização no celular
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.1.0';
 
 function registrarPWA(){
   const manifest = {
