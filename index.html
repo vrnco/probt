@@ -927,19 +927,32 @@ textarea{resize:vertical;min-height:60px}
     </div>
 
     <div class="card" style="padding:16px;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px">Informações da academia</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">🏫 Informações da academia</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Usado no calendário público e mensagens de WhatsApp</div>
       <label>Nome da academia / professor</label>
       <input type="text" id="cfg-nome-academia" placeholder="Ex: Beach Tennis Pro — João Silva">
       <div class="form-row">
         <div><label>Telefone de contato</label>
-          <input type="tel" id="cfg-tel-academia" placeholder="(11) 99999-9999"></div>
-        <div><label>WhatsApp para receber interesse de alunos</label>
-          <input type="tel" id="cfg-watel-academia" placeholder="(11) 99999-9999"></div>
+          <input type="tel" id="cfg-tel-academia" placeholder="(18) 99999-9999"></div>
+        <div><label>Cidade</label>
+          <input type="text" id="cfg-cidade" placeholder="São Paulo, SP"></div>
       </div>
-      <label>Cidade</label>
-      <input type="text" id="cfg-cidade" placeholder="São Paulo, SP">
-      <div style="margin-top:14px;text-align:right">
-        <button class="btn btn-primary btn-sm" onclick="salvarInfoSistema()">Salvar informações</button>
+      <label>📱 WhatsApp para receber interesse de novos alunos</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="tel" id="cfg-watel-academia" placeholder="(18) 99999-9999" style="flex:1" oninput="atualizarBotaoWA()">
+        <div id="cfg-wa-preview" style="display:none">
+          <a id="cfg-wa-link" href="#" target="_blank"
+            style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">
+            💬 Testar WA
+          </a>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:12px">
+        Este número aparece no botão "💬 Tenho interesse" no calendário público
+      </div>
+      <div style="margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+        <div id="cfg-academia-status" style="font-size:12px;color:var(--muted)"></div>
+        <button class="btn btn-primary btn-sm" onclick="salvarInfoSistema()">💾 Salvar informações</button>
       </div>
     </div>
     <div class="card" style="padding:16px;margin-bottom:12px">
@@ -4216,10 +4229,16 @@ function renderCfgSistema(){
       <button class="cfg-pill-del" onclick="cfgPgtos.splice(${i},1);renderCfgSistema()">×</button>
     </span>`).join('');
   // Info academia
-  const n = document.getElementById('cfg-nome-academia'); if(n) n.value = cfgInfoSistema.nome;
-  const t = document.getElementById('cfg-tel-academia');  if(t) t.value = cfgInfoSistema.tel;
+  const n = document.getElementById('cfg-nome-academia'); if(n) n.value = cfgInfoSistema.nome||'';
+  const t = document.getElementById('cfg-tel-academia');  if(t) t.value = cfgInfoSistema.tel||'';
   const w = document.getElementById('cfg-watel-academia');if(w) w.value = cfgInfoSistema.watel||'';
-  const cc= document.getElementById('cfg-cidade');        if(cc)cc.value = cfgInfoSistema.cidade;
+  const cc= document.getElementById('cfg-cidade');        if(cc)cc.value = cfgInfoSistema.cidade||'';
+  // Atualiza preview do botão WA e status
+  atualizarBotaoWA();
+  const stEl = document.getElementById('cfg-academia-status');
+  if(stEl && (cfgInfoSistema.nome||cfgInfoSistema.watel)){
+    stEl.innerHTML = '<span style="color:var(--green)">✅ Dados carregados</span>';
+  }
 }
 function cfgAddPgto(){
   const inp = document.getElementById('cfg-pgto-novo');
@@ -4240,13 +4259,60 @@ function salvarInfoSistema(){
   cfgInfoSistema.tel    = (document.getElementById('cfg-tel-academia')||{}).value||'';
   cfgInfoSistema.watel  = (document.getElementById('cfg-watel-academia')||{}).value||'';
   cfgInfoSistema.cidade = (document.getElementById('cfg-cidade')||{}).value||'';
-  // Salva sempre no cache local primeiro (garante persistência mesmo sem tabela no Supabase)
-  salvarCacheLocal();
-  // Tenta salvar no Supabase também
+
+  // 1. Salva em chave própria permanente (nunca expira, nunca sobrescrita)
+  try {
+    localStorage.setItem(ACADEMIA_KEY, JSON.stringify(cfgInfoSistema));
+  } catch(e){ console.warn('Erro ao salvar academia local:', e); }
+
+  // 2. Atualiza o botão de WA
+  atualizarBotaoWA();
+
+  // 3. Atualiza status
+  const el = document.getElementById('cfg-academia-status');
+  if(el) el.innerHTML = '<span style="color:var(--green)">✅ Salvo localmente</span>';
+
+  // 4. Tenta salvar no Supabase
   sbSalvarConfig('cfgInfoSistema', cfgInfoSistema).then(ok=>{
-    if(ok) showToast('✅ Informações salvas no banco!');
-    else   showToast('✅ Informações salvas localmente! (Execute o SQL setup_configs.sql no Supabase para salvar na nuvem)');
+    const el = document.getElementById('cfg-academia-status');
+    if(ok){
+      showToast('✅ Informações da academia salvas!');
+      if(el) el.innerHTML = '<span style="color:var(--green)">✅ Salvo no banco</span>';
+    } else {
+      showToast('✅ Salvo localmente!');
+      if(el) el.innerHTML = '<span style="color:var(--amber)">💾 Salvo localmente (Supabase indisponível)</span>';
+    }
   });
+}
+
+// Mostra preview do botão de WhatsApp ao digitar o número
+function atualizarBotaoWA(){
+  const numEl = document.getElementById('cfg-watel-academia');
+  const prev  = document.getElementById('cfg-wa-preview');
+  const link  = document.getElementById('cfg-wa-link');
+  if(!numEl||!prev||!link) return;
+  const num = (numEl.value||cfgInfoSistema.watel||'').replace(/\D/g,'');
+  if(num.length >= 10){
+    const msg = encodeURIComponent('Olá! Tenho interesse nas aulas de beach tennis. Poderia me passar mais informações?');
+    link.href = 'https://wa.me/55' + num + '?text=' + msg;
+    prev.style.display = 'block';
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+// Carrega academia do localStorage permanente
+function carregarAcademiaLocal(){
+  try {
+    const raw = localStorage.getItem(ACADEMIA_KEY);
+    if(raw){
+      const d = JSON.parse(raw);
+      cfgInfoSistema = {...cfgInfoSistema, ...d};
+      console.log('✅ Academia carregada do localStorage:', cfgInfoSistema.nome);
+      return true;
+    }
+  } catch(e){ console.warn('Erro ao ler academia local:', e); }
+  return false;
 }
 
 // ---------- EXPORT ----------
@@ -5367,6 +5433,7 @@ let _carregando = false;
 
 // ===================== CACHE OFFLINE =====================
 const CACHE_KEY   = 'bt_dados_cache_v1';
+const ACADEMIA_KEY = 'bt_academia_v1'; // chave permanente para academia
 const CACHE_TS_KEY= 'bt_dados_cache_ts';
 const CACHE_TTL   = 1000 * 60 * 60 * 24 * 7; // 7 dias
 
@@ -5488,7 +5555,12 @@ async function carregarConfigsDoSupabase(){
     rows.forEach(row=>{
       const v = row.valor;
       if(!v) return;
-      if(row.chave==='cfgInfoSistema')  cfgInfoSistema  = {...cfgInfoSistema,  ...v};
+      if(row.chave==='cfgInfoSistema'){
+        // Só sobrescreve do Supabase se o localStorage local não tiver dados
+        const temLocal = localStorage.getItem(ACADEMIA_KEY);
+        if(!temLocal) cfgInfoSistema = {...cfgInfoSistema, ...v};
+        else cfgInfoSistema = {...v, ...JSON.parse(temLocal)}; // local tem prioridade
+      }
       if(row.chave==='cfgPgtos')        cfgPgtos        = v;
       if(row.chave==='cfgGolpesPlano')  cfgGolpesPlano  = v;
       if(row.chave==='cfgCategorias')   cfgCategorias   = v;
@@ -5931,7 +6003,10 @@ async function iniciarApp(){
     }
   }
 
-  // 4. Carrega dados (cache ou Supabase)
+  // 4. Carrega academia do localStorage permanente (antes do Supabase)
+  carregarAcademiaLocal();
+
+  // 5. Carrega dados (cache ou Supabase)
   await carregarTudo();
 
   // 5. Inicializa UI — sempre, independente do caminho do carregarTudo
