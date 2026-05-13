@@ -116,7 +116,7 @@ textarea{resize:vertical;min-height:60px}
 /* dashboard 2-col layout on desktop */
 .dash-grid{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
 .dash-main{}
-.dash-side{}
+.dash-side{position:sticky;top:60px;align-self:start}
 /* aniversariantes */
 .aniv-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
 .aniv-header{background:linear-gradient(135deg,#ff6b6b,#ffd93d);padding:12px 16px;display:flex;align-items:center;gap:8px}
@@ -1668,13 +1668,21 @@ gerarCobrancas();
 
 // ===================== NAV =====================
 function goPage(p, btn){
-  document.querySelectorAll('.page').forEach(x=>{ x.style.display=''; x.classList.remove('active'); });
+  document.querySelectorAll('.page').forEach(x=>{
+    x.style.display='none';
+    x.classList.remove('active');
+  });
   document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
   const pg = document.getElementById('pg-'+p);
-  if(pg){ pg.style.display=''; pg.classList.add('active'); }
+  if(pg){
+    pg.style.display='block';
+    pg.classList.add('active');
+  }
   if(btn) btn.classList.add('active');
-  // Volta ao topo da página ao trocar de aba
-  window.scrollTo({top: 0, behavior: 'instant'});
+  // Scroll ao topo — window E o container se existir
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
   const map={dashboard:initDashboard,presenca:initPresenca,alunos:renderAlunos,financeiro:initFin,plano:initPlano,config:initConfig};
   if(map[p]) map[p]();
 }
