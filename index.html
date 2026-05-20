@@ -3458,19 +3458,40 @@ function parsearTextoBancario(texto){
   const resultado = [];
   linhas.forEach(linha=>{
     const valorMatch = linha.match(/\b(\d{1,6}[,\.]\d{2})\b/g);
-    const dataMatch = linha.match(/\b(\d{2}\/\d{2}(?:\/\d{2,4})?)\b/);
+    const dataMatch  = linha.match(/\b(\d{2}\/\d{2}(?:\/\d{2,4})?)\b/);
     if(!valorMatch) return;
     const valor = Math.max(...valorMatch.map(v=>parseFloat(v.replace(/\./g,'').replace(',','.'))));
-    if(valor < 1 || valor > 50000) return; // filtra ruídos
+    if(valor < 1 || valor > 50000) return;
     const data = dataMatch ? dataMatch[1].slice(0,5) : '';
+
+    // Detectar se é débito (saída) ou crédito (entrada)
+    const linhaLow = linha.toLowerCase();
+    const isDebito =
+      // Valores negativos explícitos: -R$ ou -43,90
+      /[-−][\s]*r?\$?[\s]*\d/.test(linha) ||
+      /-\d{1,6}[,.]\d{2}/.test(linha) ||
+      // Palavras que indicam saída de dinheiro
+      /\b(enviado|pagamento|pagto|pago|saque|retirada|debito|d[eé]bito|transferido|ted out|doc out|compra|tarifa|cobrança|boleto pago|envio)\b/i.test(linhaLow) ||
+      // Prefixo "enviado:"  comum em Nubank/C6
+      linhaLow.startsWith('enviado') ||
+      // "-R$" na linha
+      linha.includes('-R$') ||
+      // Coluna de débito: linhas que têm valor só na coluna de débito
+      // Padrão: número seguido de letra D ou (D)
+      /\d[,.]\d{2}\s*D\b/.test(linha);
+
+    // Marcar com valor negativo se for débito
+    const valorFinal = isDebito ? -valor : valor;
+
     let nome = linha
       .replace(valorMatch[valorMatch.length-1],'')
       .replace(dataMatch?dataMatch[0]:'','')
+      .replace(/[-−]\s*R?\$?\s*/g,'')
+      .replace(/\b(PIX|TED|DOC|TRANSF|TRANSFERENCIA|RECEBIDO|PAGAMENTO|DEPOSITO|CREDITO|CR|DR|Cr|Dr)\b/gi,' ')
       .replace(/\s+/g,' ').trim();
-    // remove palavras técnicas comuns de extratos
-    nome = nome.replace(/\b(PIX|TED|DOC|TRANSF|TRANSFERENCIA|RECEBIDO|PAGAMENTO|DEPOSITO|CREDITO|CR|DR|Cr|Dr)\b/gi,' ').replace(/\s+/g,' ').trim();
+
     if(nome.length > 2)
-      resultado.push({data, nome, valor, linhaOriginal: linha});
+      resultado.push({data, nome, valor: valorFinal, linhaOriginal: linha});
   });
   return resultado;
 }
@@ -3525,10 +3546,10 @@ function processarLinhasExtrato(linhasRaw){
 
   const conf = extratoLinhas.filter(l=>l.confirmado).length;
   const nconf = extratoLinhas.filter(l=>!l.confirmado).length;
-  const creditos = extratoLinhas.filter(l=>!l.valor||l.valor>0).length;
-  const debitos  = extratoLinhas.filter(l=>l.valor&&l.valor<0).length;
+  const creditos = extratoLinhas.filter(l=>l.valor > 0 || l.valor === null || l.valor === undefined).length;
+  const debitos  = extratoLinhas.filter(l=>l.valor !== null && l.valor !== undefined && l.valor <= 0).length;
   document.getElementById('ext-resumo-parse').textContent =
-    `${creditos} recebimento${creditos!==1?'s':''} · ${debitos} débito${debitos!==1?'s':''} · ${conf} identificado${conf!==1?'s':''} · ${nconf} pendente${nconf!==1?'s':''}`;
+    `${creditos} recebimento${creditos!==1?'s':''} · ${debitos} débito${debitos!==1?'s':''} · ${conf} identificado${conf!==1?'s':''} · ${nconf-conf} pendente${(nconf-conf)!==1?'s':''}`;
   // Seleciona automaticamente o filtro de créditos
   const filtSel = document.getElementById('ext-filtro-tipo');
   if(filtSel) filtSel.value='creditos';
@@ -3551,9 +3572,9 @@ function renderExtratoLinhas(){
   const filtro = document.getElementById('ext-filtro-tipo')?.value || 'creditos';
   let lista = [...extratoLinhas].sort((a,b)=>(b.confirmado?0:1)-(a.confirmado?0:1));
 
-  if(filtro==='creditos')    lista = lista.filter(l=>!l.valor||l.valor>0);
+  if(filtro==='creditos')    lista = lista.filter(l=> l.valor === null || l.valor === undefined || l.valor > 0);
   if(filtro==='identificados') lista = lista.filter(l=>l.confirmado||l.splitAlunos?.length);
-  if(filtro==='pendentes')   lista = lista.filter(l=>!l.confirmado&&!l.splitAlunos?.length);
+  if(filtro==='pendentes')   lista = lista.filter(l=>!l.confirmado&&!l.splitAlunos?.length && (l.valor > 0 || l.valor === null));
 
   c.innerHTML=lista.map(l=>{
     const isSplit = l.splitAlunos && l.splitAlunos.length > 1;
