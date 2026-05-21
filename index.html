@@ -502,8 +502,17 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   </div>
 
   <div id="at-lista">
-    <!-- Busca -->
-    <input id="busca-aluno" type="text" placeholder="Buscar por nome..." oninput="renderAlunos()" style="margin-bottom:14px">
+    <!-- Busca + Filtros -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+      <input id="busca-aluno" type="text" placeholder="🔍 Buscar por nome..." oninput="renderAlunos()" style="flex:1;min-width:160px;margin-bottom:0">
+    </div>
+    <!-- Filtro rápido -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="dia-btn on" id="filtro-aluno-todos" onclick="setFiltroAluno('todos',this)">Todos</button>
+      <button class="dia-btn" id="filtro-aluno-sem-turma" onclick="setFiltroAluno('sem-turma',this)">
+        ⚠️ Sem horário <span id="badge-sem-turma" class="badge b-red" style="margin-left:4px">0</span>
+      </button>
+    </div>
     <!-- Ativos -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <div style="font-size:13px;font-weight:700;color:var(--green)">Ativos</div>
@@ -2331,29 +2340,75 @@ async function adjRep(delta){
 }
 
 // ===================== ALUNOS =====================
+let filtroAlunoAtual = 'todos';
+
+function setFiltroAluno(filtro, btn){
+  filtroAlunoAtual = filtro;
+  document.querySelectorAll('[id^="filtro-aluno-"]').forEach(b=>b.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  renderAlunos();
+}
+
 function renderAlunos(){
   const busca=normalize(document.getElementById('busca-aluno').value||'');
-  const ativos=alunos.filter(a=>a.ativo&&normalize(a.nome).includes(busca));
-  const inativos=alunos.filter(a=>!a.ativo&&normalize(a.nome).includes(busca));
+
+  // Alunos sem turma (ativos mas sem nenhum horário)
+  const semTurma = alunos.filter(a=>a.ativo && (!a.turmas||a.turmas.length===0));
+
+  // Aplicar filtro
+  let ativosBase = alunos.filter(a=>a.ativo);
+  if(filtroAlunoAtual==='sem-turma') ativosBase = semTurma;
+
+  const ativos   = ativosBase.filter(a=>normalize(a.nome).includes(busca));
+  const inativos = filtroAlunoAtual==='sem-turma' ? [] :
+    alunos.filter(a=>!a.ativo&&normalize(a.nome).includes(busca));
+
   const totalAtivos=alunos.filter(a=>a.ativo).length;
   const totalInativos=alunos.filter(a=>!a.ativo).length;
   const turmasMapa={};
   turmas.forEach(t=>{const n=alunos.filter(a=>a.ativo&&a.turmas&&a.turmas.includes(t.id)).length;turmasMapa[t.id]=n;});
+
+  // Atualiza badge sem turma
+  const badgeSemTurma = document.getElementById('badge-sem-turma');
+  if(badgeSemTurma) badgeSemTurma.textContent = semTurma.length;
 
   // Stats
   document.getElementById('alunos-stats').innerHTML=`
     <div class="metric"><div class="metric-label">Alunos ativos</div><div class="metric-value" style="color:var(--green)">${totalAtivos}</div></div>
     <div class="metric"><div class="metric-label">Inativos</div><div class="metric-value" style="color:var(--muted)">${totalInativos}</div></div>
     <div class="metric"><div class="metric-label">Total cadastrado</div><div class="metric-value">${alunos.length}</div></div>
+    <div class="metric" onclick="setFiltroAluno('sem-turma',document.getElementById('filtro-aluno-sem-turma'))" style="cursor:pointer">
+      <div class="metric-label">Sem horário</div>
+      <div class="metric-value" style="color:${semTurma.length>0?'var(--red)':'var(--green)'}">${semTurma.length}</div>
+    </div>
     <div class="metric"><div class="metric-label">Turmas</div><div class="metric-value">${turmas.length}</div></div>`;
   document.getElementById('badge-ativos').textContent=ativos.length;
   document.getElementById('badge-inativos').textContent=inativos.length;
+  // Update label based on filter
+  const labelAtivos = document.querySelector('#alunos-ativos').previousElementSibling?.querySelector('div');
+  // Show sem-turma alert if any
+  if(semTurma.length > 0 && filtroAlunoAtual === 'todos' && !busca){
+    const alertEl = document.getElementById('sem-turma-alert');
+    if(!alertEl){
+      const div = document.createElement('div');
+      div.id='sem-turma-alert';
+      div.style.cssText='background:#fceaea;border:1px solid #e53935;border-radius:8px;padding:8px 12px;font-size:12px;color:#b02020;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:8px';
+      div.innerHTML=`⚠️ <strong>${semTurma.length} aluno${semTurma.length>1?'s':''} ativo${semTurma.length>1?'s':''} sem horário</strong> — <span style="text-decoration:underline">Ver lista</span>`;
+      div.onclick=()=>setFiltroAluno('sem-turma',document.getElementById('filtro-aluno-sem-turma'));
+      const busca_el = document.getElementById('busca-aluno');
+      busca_el?.parentElement?.parentElement?.insertBefore(div, busca_el.parentElement.nextSibling);
+    }
+  } else {
+    document.getElementById('sem-turma-alert')?.remove();
+  }
   document.getElementById('alunos-ativos').innerHTML=ativos.length?`<div class="card" style="padding:10px 14px">${ativos.map(a=>alunoRowHtml(a)).join('')}</div>`:'<div class="empty" style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:4px">Nenhum aluno ativo</div>';
   document.getElementById('alunos-inativos').innerHTML=inativos.length?`<div class="card" style="padding:10px 14px;opacity:.85">${inativos.map(a=>alunoRowHtml(a)).join('')}</div>`:'<div style="font-size:13px;color:var(--muted);padding:8px 0">Nenhum aluno inativo</div>';
 }
 
 function alunoRowHtml(a){
   const t=a.turmas.map(tid=>{const x=turmas.find(t=>t.id===tid);return x?x.nome:''}).filter(Boolean).join(', ');
+  const semTurmaAlert = a.ativo && (!a.turmas||a.turmas.length===0)
+    ? `<span class="badge b-red" style="margin-left:4px;font-size:10px">⚠️ Sem horário</span>` : '';
   const saldo=a.reposicoes?a.reposicoes.saldo:0;
   const camisaBadge=a.camisa?`<span class="badge b-blue" style="margin-left:4px">👕 ${a.camisa}</span>`:'';
   const catBadge=a.catAtual?`<span class="badge b-amber" style="margin-left:2px">${a.catAtual}</span>`:'';
@@ -2366,7 +2421,7 @@ function alunoRowHtml(a){
         ${!a.ativo?'<span class="tag-inativo">inativo</span>':''}
       </div>
       <div style="font-size:12px;color:var(--muted);margin-top:1px">${calcIdade(a.nasc)} anos · ${a.aulasSemana||1}x/sem · ${a.patrocinado?'<span style="color:var(--amber);font-weight:600">🤝 '+( a.patrocinador?a.patrocinador:'Patrocinado')+'</span>':fmtR(a.valor)+' · '+pgtoLabel(a.pgto)}</div>
-      <div style="font-size:11px;color:var(--muted)">${t}</div>
+      <div style="font-size:11px;color:var(--muted)">${t||'<span style="color:var(--red)">Sem horário cadastrado</span>'}${semTurmaAlert}</div>
       ${saldo!==0?`<span class="badge ${saldo>0?'b-blue':'b-red'}" style="margin-top:3px">${saldo>0?'+':''}${saldo} rep.</span>`:''}
       ${a.obs?`<div class="bio-obs">${a.obs}</div>`:''}
     </div>
