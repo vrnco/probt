@@ -521,7 +521,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   <div id="at-graficos" style="display:none">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <select id="aluno-graf-ano" onchange="renderGraficosAlunos()" style="width:auto">
-        <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+        <script>for(let y=new Date().getFullYear();y>=new Date().getFullYear()-4;y--)document.write(`<option value="${y}">${y}</option>`);</script>
       </select>
     </div>
     <div class="card" style="padding:16px 20px;margin-bottom:14px">
@@ -649,7 +649,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
     <!-- Selector ano -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <select id="analise-ano" onchange="renderAnalises()" style="width:auto">
-        <option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option>
+        <script>for(let y=new Date().getFullYear();y>=new Date().getFullYear()-4;y--)document.write(`<option value="${y}">${y}</option>`);</script>
       </select>
       <span style="font-size:13px;color:var(--muted)">Dados simulados para demonstração</span>
     </div>
@@ -1770,7 +1770,14 @@ function switchAlunosTab(tab, btn){
   btn.classList.add('active');
   document.getElementById('at-lista').style.display = tab==='lista'?'block':'none';
   document.getElementById('at-graficos').style.display = tab==='graficos'?'block':'none';
-  if(tab==='graficos') renderGraficosAlunos();
+  if(tab==='graficos'){
+    // Garante que o ano selecionado é o atual
+    const sel = document.getElementById('aluno-graf-ano');
+    if(sel && sel.value !== String(new Date().getFullYear())){
+      sel.value = String(new Date().getFullYear());
+    }
+    renderGraficosAlunos();
+  }
 }
 
 // ===================== DASHBOARD =====================
