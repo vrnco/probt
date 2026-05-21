@@ -3168,6 +3168,12 @@ function gerarCobrancasMesAtual(){
   const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   alunos.filter(a=>a.ativo && !a.patrocinado).forEach(a=>{
     const jaExiste = cobrancas.find(c=>c.alunoId===a.id && c.mes===mes);
+    // Corrige valor se a cobrança existe mas com valor errado
+    if(jaExiste && a.valor && jaExiste.valor !== a.valor && !jaExiste.pago){
+      jaExiste.valor = a.valor;
+      sbUpsertConfig; // não bloqueia — apenas atualiza em background
+      sbPatch('cobrancas', jaExiste._sbId||jaExiste.id, {valor:a.valor}).catch(()=>{});
+    }
     if(!jaExiste){
       const id = cobIdC++;
       const nova = {
