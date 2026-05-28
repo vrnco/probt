@@ -29,7 +29,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:v
 .nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .nav-btn:hover:not(.active){background:#f8f8f4;color:var(--text)}
 /* LAYOUT */
-.page{display:none;padding:16px;max-width:960px;margin:0 auto;
+.page{display:none;padding:16px;padding-top:calc(56px + 16px);max-width:960px;margin:0 auto;
   padding-bottom:calc(16px + env(safe-area-inset-bottom)); /* espaço para o indicador home */
 }
 .page.active{display:block}
@@ -372,7 +372,7 @@ textarea{resize:vertical;min-height:60px}
   padding-top: env(safe-area-inset-top);
 }
 .pwa-standalone .page {
-  padding-top: calc(60px + env(safe-area-inset-top)) !important;
+  padding-top: calc(56px + 16px + env(safe-area-inset-top)) !important;
 }
 </style>
 </head>
