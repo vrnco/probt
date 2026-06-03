@@ -21,7 +21,7 @@
 body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 /* NAV */
 .nav{display:flex;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto;position:fixed;top:0;left:0;right:0;z-index:50;
-  padding-top:env(safe-area-inset-top);     /* empurra abaixo do notch/câmera */
+  padding-top:env(safe-area-inset-top); padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); /* empurra abaixo do notch/câmera */
   padding-left:env(safe-area-inset-left);
   padding-right:env(safe-area-inset-right);
 }
@@ -29,8 +29,8 @@ body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:v
 .nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .nav-btn:hover:not(.active){background:#f8f8f4;color:var(--text)}
 /* LAYOUT */
-.page{display:none;padding:16px;padding-top:calc(56px + 16px);max-width:960px;margin:0 auto;
-  padding-bottom:calc(16px + env(safe-area-inset-bottom)); /* espaço para o indicador home */
+.page{display:none;padding:16px;padding-top:calc(56px + 16px + env(safe-area-inset-top));max-width:960px;margin:0 auto;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom));
 }
 .page.active{display:block}
 #pg-dashboard{max-width:100%;padding:14px 20px;
@@ -84,7 +84,7 @@ textarea{resize:vertical;min-height:60px}
 .b-gray{background:#f0f0e8;color:#666}
 .b-purple{background:var(--purple-bg);color:var(--purple)}
 /* MODAIS */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:max(30px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));overflow-y:auto}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:max(56px,calc(env(safe-area-inset-top) + 12px)) 12px max(12px,env(safe-area-inset-bottom));overflow-y:auto}
 .modal-bg.open{display:flex}
 .modal{background:var(--card);border-radius:14px;border:1px solid var(--border);padding:20px;width:100%;max-width:520px;position:relative;z-index:201}
 .modal-title{font-size:15px;font-weight:700;margin-bottom:14px;padding-right:28px}
@@ -1544,7 +1544,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
 
 <!-- Modal Confirmar Pagamento -->
 <div id="modal-confirmar-pag" class="modal-bg">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-title">✅ Confirmar pagamento</div>
     <button class="modal-close" onclick="closeModal('modal-confirmar-pag')">×</button>
     <div id="cpag-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
@@ -1555,6 +1555,15 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
       <button class="dia-btn" onclick="setCpagPgto(this,'dinheiro')">💵 Dinheiro</button>
       <button class="dia-btn" onclick="setCpagPgto(this,'boleto')">🔖 Boleto</button>
     </div>
+    <label>Meses a pagar</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="cpag-meses-btns">
+      <button class="dia-btn on" onclick="setCpagMeses(this,1)">1 mês</button>
+      <button class="dia-btn" onclick="setCpagMeses(this,2)">2 meses</button>
+      <button class="dia-btn" onclick="setCpagMeses(this,3)">3 meses</button>
+      <button class="dia-btn" onclick="setCpagMeses(this,6)">6 meses</button>
+      <button class="dia-btn" onclick="setCpagMeses(this,12)">12 meses</button>
+    </div>
+    <div id="cpag-meses-preview" style="display:none;background:#e8f5e9;border-radius:8px;padding:8px 12px;font-size:12px;color:#2e7d32;margin-bottom:10px"></div>
     <label>Data do pagamento</label>
     <input type="date" id="cpag-data">
     <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
@@ -3196,13 +3205,13 @@ function irParaPresencaTurma(){
 
 // ===================== FINANCEIRO =====================
 function initFin(){
-  // Gera opções de meses dinamicamente: 3 meses anteriores + atual + 2 próximos
+  // Gera opções de meses dinamicamente: 3 meses anteriores + atual + 3 próximos
   const sel = document.getElementById('filtro-mes');
   const now = new Date();
   const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const opts = [];
-  for(let i = -3; i <= 2; i++){
+  for(let i = -3; i <= 3; i++){
     const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
     const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const label = `${meses[d.getMonth()]} ${d.getFullYear()}`;
@@ -3287,24 +3296,29 @@ function renderCobrancas(){
 }
 let cpagId = null;
 let cpagPgto = 'pix';
-let cpagCallback = null; // função a chamar após confirmar (ex: renderAtraso, renderCobrancas)
+let cpagMeses = 1;
+let cpagCallback = null;
 
 function abrirConfirmarPag(cobId, callback){
   const p = cobrancas.find(x=>x.id===cobId); if(!p)return;
   const a = alunos.find(x=>x.id===p.alunoId);
   cpagId = cobId;
   cpagPgto = p.pgto||'pix';
+  cpagMeses = 1;
   cpagCallback = callback||null;
   document.getElementById('cpag-info').innerHTML=`
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">${p.alunoNome}</div>
     <div style="font-size:13px;color:var(--muted)">${fmtR(p.valor)} · ${mesNome(p.mes)}</div>`;
   document.getElementById('cpag-data').value = today();
-  // Marca forma padrão do aluno
+  // Reset forma padrão
   document.querySelectorAll('#cpag-pgto-btns .dia-btn').forEach(b=>b.classList.remove('on'));
   const mapa = {pix:0,cartao:1,dinheiro:2,boleto:3};
   const btns = document.querySelectorAll('#cpag-pgto-btns .dia-btn');
   const idx = mapa[cpagPgto]??0;
   if(btns[idx]) btns[idx].classList.add('on');
+  // Reset meses buttons
+  document.querySelectorAll('#cpag-meses-btns .dia-btn').forEach((b,i)=>b.classList.toggle('on',i===0));
+  document.getElementById('cpag-meses-preview').style.display='none';
   openModal('modal-confirmar-pag');
 }
 
@@ -3314,19 +3328,61 @@ function setCpagPgto(btn, pgto){
   btn.classList.add('on');
 }
 
+function setCpagMeses(btn, n){
+  cpagMeses = n;
+  document.querySelectorAll('#cpag-meses-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  // Mostrar preview dos meses que serão pagos
+  const prev = document.getElementById('cpag-meses-preview');
+  if(n === 1){ prev.style.display='none'; return; }
+  const p = cobrancas.find(x=>x.id===cpagId); if(!p) return;
+  const a = alunos.find(x=>x.id===p.alunoId);
+  const mesesList = [];
+  const [y,m] = p.mes.split('-').map(Number);
+  for(let i=0; i<n; i++){
+    const d = new Date(y, m-1+i, 1);
+    const mesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    mesesList.push(mesNome(mesKey));
+  }
+  const total = (a?.valor||p.valor) * n;
+  prev.style.display='block';
+  prev.innerHTML = `💰 <strong>${fmtR(total)}</strong> · ${mesesList.join(', ')}`;
+}
+
 async function confirmarPagamento(){
   const p = cobrancas.find(x=>x.id===cpagId); if(!p)return;
+  const a = alunos.find(x=>x.id===p.alunoId);
   const data = document.getElementById('cpag-data').value || today();
-  p.pago = true;
-  p.dataPag = data;
-  p.pgto = cpagPgto;
+  const mesesPagar = cpagMeses || 1;
+  const cobParaSalvar = [];
+  const [y,m] = p.mes.split('-').map(Number);
+
+  for(let i=0; i<mesesPagar; i++){
+    const d = new Date(y, m-1+i, 1);
+    const mesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    let cob = cobrancas.find(c=>c.alunoId===p.alunoId && c.mes===mesKey);
+    if(!cob){
+      const novaCob = {
+        id:cobIdC++, _sbId:null, alunoId:p.alunoId, alunoNome:p.alunoNome,
+        mes:mesKey, valor:a?.valor||p.valor, pago:false, dataPag:null,
+        pgto:cpagPgto, turma:p.turma||''
+      };
+      cobrancas.push(novaCob);
+      cob = novaCob;
+    }
+    cob.pago=true; cob.dataPag=data; cob.pgto=cpagPgto;
+    cobParaSalvar.push(cob);
+  }
+
   closeModal('modal-confirmar-pag');
   renderCobrancas();
   if(cpagCallback) cpagCallback();
-  await sbSalvarCobranca(p);
+  await Promise.all(cobParaSalvar.map(c=>sbSalvarCobranca(c)));
   salvarCacheLocal();
-  showToast('✅ Pagamento confirmado!');
+  const total = cobParaSalvar.reduce((s,c)=>s+c.valor,0);
+  showToast(mesesPagar>1 ? `✅ ${mesesPagar} meses pagos! Total: ${fmtR(total)}` : '✅ Pagamento confirmado!');
 }
+
 
 async function togglePag(id){
   // Para desfazer (já pago → pendente): não precisa de modal
