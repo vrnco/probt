@@ -652,10 +652,10 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
             <div style="display:flex;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px 6px;align-items:center">
               <label style="font-size:12px;color:var(--muted);white-space:nowrap">Mostrar:</label>
               <select id="ext-filtro-tipo" onchange="renderExtratoLinhas()" style="border:none;background:transparent;font-size:12px;cursor:pointer;padding:2px 0">
-                <option value="todos">Todos os lançamentos</option>
-                <option value="creditos" selected>Só recebimentos (créditos)</option>
+                <option value="pendentes" selected>⚠️ Só pendentes</option>
+                <option value="creditos">Só recebimentos</option>
                 <option value="identificados">Só identificados</option>
-                <option value="pendentes">Só pendentes de identificação</option>
+                <option value="todos">Todos</option>
               </select>
             </div>
           <button class="btn btn-success btn-sm" onclick="aplicarBaixas()">✅ Aplicar baixas</button>
@@ -3704,7 +3704,7 @@ function processarLinhasExtrato(linhasRaw){
     `${creditos} recebimento${creditos!==1?'s':''} · ${debitos} débito${debitos!==1?'s':''} · ${conf} identificado${conf!==1?'s':''} · ${nconf-conf} pendente${(nconf-conf)!==1?'s':''}`;
   // Seleciona automaticamente o filtro de créditos
   const filtSel = document.getElementById('ext-filtro-tipo');
-  if(filtSel) filtSel.value='creditos';
+  if(filtSel) filtSel.value='pendentes';
   renderExtratoLinhas();
   document.getElementById('extrato-result').style.display='block';
 }
@@ -3726,7 +3726,13 @@ function renderExtratoLinhas(){
 
   if(filtro==='creditos')    lista = lista.filter(l=> l.valor === null || l.valor === undefined || l.valor > 0);
   if(filtro==='identificados') lista = lista.filter(l=>l.confirmado||l.splitAlunos?.length);
-  if(filtro==='pendentes')   lista = lista.filter(l=>!l.confirmado&&!l.splitAlunos?.length && (l.valor > 0 || l.valor === null));
+  // Pendentes = não identificado OU identificado mas cobrança ainda não paga
+  if(filtro==='pendentes')   lista = lista.filter(l=>{
+    if(l.valor !== null && l.valor !== undefined && l.valor <= 0) return false; // ignora débitos
+    if(l.splitAlunos?.length) return l.splitAlunos.some(s=>{ const cob=cobrancas.find(c=>c.id===s.cobId); return !cob||!cob.pago; });
+    if(l.confirmado && l.cobranca?.pago) return false; // já identificado E pago = não mostra
+    return true; // não identificado OU identificado mas não pago
+  });
 
   c.innerHTML=lista.map(l=>{
     const isSplit = l.splitAlunos && l.splitAlunos.length > 1;
@@ -3736,13 +3742,14 @@ function renderExtratoLinhas(){
     if(isSplit){
       status = `<span class="badge b-blue">👥 Split (${l.splitAlunos.length})</span>`;
     } else if(a){
-      status = `<span class="badge ${conf?'b-green':'b-amber'}">${conf?'✓':'?'} ${a.nome.split(' ')[0]}</span>`;
+      const nomeExib = a.nome.split(' ').slice(0,2).join(' '); status = `<span class="badge ${conf?'b-green':'b-amber'}" title="${a.nome}">${conf?'✓':'?'} ${nomeExib}</span>`;
     } else {
       status = `<span class="badge b-red">Não identificado</span>`;
     }
     const cob=l.cobranca;
-    const splitNomes = isSplit ? l.splitAlunos.map(x=>x.aluno.nome.split(' ')[0]).join(' + ') : '';
-    return`<div class="extrato-row" style="opacity:${l.confirmado?1:.8}">
+    const splitNomes = isSplit ? l.splitAlunos.map(x=>x.aluno.nome.split(' ').slice(0,2).join(' ')).join(' + ') : '';
+    const jaPago=(l.confirmado&&l.cobranca?.pago)||(l.splitAlunos?.length&&l.splitAlunos.every(s=>{const cob=cobrancas.find(c=>c.id===s.cobId);return cob?.pago;}));
+    return`<div class="extrato-row" style="opacity:${jaPago?0.45:1}">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600">${l.nomeRaw||l.texto.slice(0,50)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">
