@@ -609,7 +609,10 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
       <button class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366;margin-left:auto" onclick="dispararWAAtraso()">💬 Cobrar todos em atraso</button>
     </div>
 
-    <div class="card" style="padding:10px 14px"><div id="atraso-lista"></div></div>
+    <div class="card" style="padding:10px 14px">
+      <div id="atraso-nota" style="display:none;font-size:11px;color:var(--muted);margin-bottom:8px;padding:6px 10px;background:var(--bg);border-radius:6px"></div>
+      <div id="atraso-lista"></div>
+    </div>
   </div>
 
     <!-- Upload zone -->
@@ -3265,7 +3268,11 @@ function gerarCobrancasMesAtual(){
 }
 function renderCobrancas(){
   const mes=document.getElementById('filtro-mes').value;
-  const lista=cobrancas.filter(p=>p.mes===mes);
+  // Só mostra cobranças de alunos ATIVOS e NÃO patrocinados
+  const alunosValidos = new Set(
+    alunos.filter(a => a.ativo && !a.patrocinado).map(a => a.id)
+  );
+  const lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
   const total=lista.reduce((s,p)=>s+p.valor,0);
   const rec=lista.filter(p=>p.pago).reduce((s,p)=>s+p.valor,0);
   document.getElementById('fin-total').textContent=fmtR(total);
@@ -4876,19 +4883,21 @@ function labelAtraso(dias){
 }
 
 function renderAtraso(){
-  // Usa o mês atual baseado na data de hoje
   const now = new Date();
   const mesAtual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  // Pega todos os alunos ativos com cobrança pendente neste mês
+  // Pega todos os alunos ativos, não patrocinados, com cobrança pendente neste mês
   const itens = [];
-  alunos.filter(a=>a.ativo).forEach(a=>{
+  alunos.filter(a=>a.ativo && !a.patrocinado).forEach(a=>{
+    // Verifica se tem cobrança pendente no mês atual
+    const cob = cobrancas.find(c=>c.alunoId===a.id && c.mes===mesAtual && !c.pago);
+    if(!cob) return; // sem cobrança pendente no mês = ignora
     const res = calcAtraso(a, mesAtual);
-    if(!res) return;
-    const {diasAtraso, dataVenc, cobPendente} = res;
-    // Só mostra quem está em atraso (dias >= 0) ou vence hoje/amanhã (dias >= -1)
+    const diasAtraso = res ? res.diasAtraso : null;
+    const dataVenc   = res ? res.dataVenc   : null;
+    // Mostra quem: está atrasado (dias>=0), vence hoje/amanhã, ou não tem data definida
     if(diasAtraso !== null && diasAtraso < -1) return;
-    itens.push({aluno:a, diasAtraso, dataVenc, cob:cobPendente});
+    itens.push({aluno:a, diasAtraso, dataVenc, cob});
   });
 
   // Ordena: mais atrasado primeiro, sem data por último
@@ -4906,6 +4915,18 @@ function renderAtraso(){
   document.getElementById('atr-total').textContent = emAtraso;
   document.getElementById('atr-valor').textContent = fmtR(valorTotal);
   document.getElementById('atr-tel').textContent   = comTel;
+
+  // Nota: "Em Atraso" mostra só o mês atual e quem venceu ou vence em breve.
+  // "Cobranças" pode ter valor diferente pois inclui meses anteriores não pagos.
+  const notaEl = document.getElementById('atraso-nota');
+  if(notaEl){
+    const pendCobr = cobrancas.filter(p=>{
+      const a=alunos.find(x=>x.id===p.alunoId);
+      return a && a.ativo && !a.patrocinado && !p.pago;
+    }).reduce((s,p)=>s+p.valor,0);
+    notaEl.style.display = Math.abs(pendCobr - valorTotal) > 1 ? 'block' : 'none';
+    notaEl.textContent = `ℹ️ O total de Cobranças (${fmtR(pendCobr)}) inclui meses anteriores não pagos. Em Atraso mostra só ${mesNome(mesAtual)}.`;
+  }
 
   const c = document.getElementById('atraso-lista');
   if(!itens.length){
