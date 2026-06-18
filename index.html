@@ -580,6 +580,12 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
       <select id="filtro-mes" onchange="renderCobrancas()" style="width:auto">
         <option value="">Carregando...</option>
       </select>
+      <select id="filtro-cob-status" onchange="renderCobrancas()" style="width:auto">
+        <option value="todos">Todos</option>
+        <option value="pendentes">⏳ Só pendentes</option>
+        <option value="pagos">✅ Só pagos</option>
+        <option value="devedores">🔴 Devedores de meses anteriores</option>
+      </select>
       <button class="btn btn-sm" onclick="gerarExtrato()">Gerar extrato</button>
       <button class="btn btn-sm" style="background:#25d366;color:#fff;border-color:#25d366" onclick="abrirDispararWA()">💬 Cobrar por WhatsApp</button>
     </div>
@@ -3267,25 +3273,41 @@ function gerarCobrancasMesAtual(){
   });
 }
 function renderCobrancas(){
-  const mes=document.getElementById('filtro-mes').value;
-  // Só mostra cobranças de alunos ATIVOS e NÃO patrocinados
+  const mes = document.getElementById('filtro-mes').value;
+  const status = document.getElementById('filtro-cob-status')?.value || 'todos';
+
+  // Só alunos ATIVOS e NÃO patrocinados
   const alunosValidos = new Set(
     alunos.filter(a => a.ativo && !a.patrocinado).map(a => a.id)
   );
-  const lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
-  const total=lista.reduce((s,p)=>s+p.valor,0);
-  const rec=lista.filter(p=>p.pago).reduce((s,p)=>s+p.valor,0);
-  document.getElementById('fin-total').textContent=fmtR(total);
-  document.getElementById('fin-rec').textContent=fmtR(rec);
-  document.getElementById('fin-pend').textContent=fmtR(total-rec);
+
+  // ── Modo especial: devedores de meses anteriores ─────────────────────────
+  if(status === 'devedores'){
+    renderDevedoresMesesAnteriores(alunosValidos);
+    return;
+  }
+
+  let lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
+
+  // Stats sempre sobre o mês completo (antes do filtro de status)
+  const total = lista.reduce((s,p)=>s+p.valor, 0);
+  const rec   = lista.filter(p=>p.pago).reduce((s,p)=>s+p.valor, 0);
+  document.getElementById('fin-total').textContent = fmtR(total);
+  document.getElementById('fin-rec').textContent   = fmtR(rec);
+  document.getElementById('fin-pend').textContent  = fmtR(total-rec);
   const taxa = total>0 ? Math.round(rec/total*100) : 0;
   const taxaEl = document.getElementById('fin-taxa');
   if(taxaEl){ taxaEl.textContent=taxa+'%'; taxaEl.style.color=taxa>=80?'var(--green)':taxa>=50?'var(--amber)':'var(--red)'; }
-  const c=document.getElementById('cobrancas-lista');
-  if(!lista.length){c.innerHTML='<div class="empty">Sem cobranças</div>';return;}
-  const alunosFiltro=alunos.filter(a=>lista.find(l=>l.alunoId===a.id));
-  c.innerHTML=lista.map(p=>{
-    const a=alunos.find(x=>x.id===p.alunoId);
+
+  // Filtro de status
+  if(status === 'pendentes') lista = lista.filter(p => !p.pago);
+  if(status === 'pagos')     lista = lista.filter(p =>  p.pago);
+
+  const c = document.getElementById('cobrancas-lista');
+  if(!lista.length){ c.innerHTML='<div class="empty">Sem cobranças</div>'; return; }
+
+  c.innerHTML = lista.map(p=>{
+    const a = alunos.find(x=>x.id===p.alunoId);
     return`<div class="fin-row">
       ${a?fotoEl(a,'avatar'):'<div class="avatar">?</div>'}
       <div style="flex:1;min-width:0">
@@ -3302,16 +3324,66 @@ function renderCobrancas(){
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
         ${p.pago
           ?`<button class="btn btn-xs" onclick="togglePag(${p.id})">Desfazer</button>`
-          :`<button class="btn btn-primary btn-xs" onclick="togglePag(${p.id})">Baixar</button>`}
-        ${a&&a.tel
-          ? p.pago
-            ? `<button class="btn btn-xs" style="background:#25d366;color:#fff;border-color:#25d366;font-size:11px" onclick="enviarConfirmacaoWA(${p.id})">💬 Confirmar</button>`
-            : `<button class="btn btn-xs" style="background:#25d366;color:#fff;border-color:#25d366;font-size:11px" onclick="enviarWAUnico(${p.id})">💬 Cobrar</button>`
-          : ''}
+          :`<button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${p.id},renderCobrancas)">✅ Pago</button>`}
       </div>
     </div>`;
   }).join('');
 }
+
+// Mostra alunos com cobranças não pagas em meses ANTERIORES ao atual
+function renderDevedoresMesesAnteriores(alunosValidos){
+  const now = new Date();
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // Agrupar cobranças não pagas por aluno, só meses anteriores
+  const devedores = {};
+  cobrancas
+    .filter(p => !p.pago && alunosValidos.has(p.alunoId) && p.mes < mesAtual)
+    .forEach(p => {
+      if(!devedores[p.alunoId]) devedores[p.alunoId] = {cobs:[], total:0};
+      devedores[p.alunoId].cobs.push(p);
+      devedores[p.alunoId].total += p.valor;
+    });
+
+  const totalDev = Object.values(devedores).reduce((s,d)=>s+d.total, 0);
+  const qtdDev   = Object.keys(devedores).length;
+
+  // Atualiza stats
+  document.getElementById('fin-total').textContent = fmtR(totalDev);
+  document.getElementById('fin-rec').textContent   = fmtR(0);
+  document.getElementById('fin-pend').textContent  = fmtR(totalDev);
+  const taxaEl = document.getElementById('fin-taxa');
+  if(taxaEl){ taxaEl.textContent = qtdDev+' devedor'+(qtdDev!==1?'es':''); taxaEl.style.color='var(--red)'; }
+
+  const c = document.getElementById('cobrancas-lista');
+  if(!qtdDev){
+    c.innerHTML='<div class="empty">🎉 Nenhum aluno com meses anteriores em aberto!</div>';
+    return;
+  }
+
+  c.innerHTML = Object.entries(devedores)
+    .sort((a,b) => b[1].total - a[1].total) // mais devedor primeiro
+    .map(([alunoId, {cobs, total}]) => {
+      const a = alunos.find(x=>x.id===parseInt(alunoId));
+      const mesesList = cobs
+        .sort((a,b)=>a.mes.localeCompare(b.mes))
+        .map(p=>`<span class="badge b-red" style="margin-right:3px;cursor:pointer" onclick="abrirConfirmarPag(${p.id},renderCobrancas)">${mesNome(p.mes)} ${fmtR(p.valor)}</span>`)
+        .join('');
+      return`<div class="fin-row" style="flex-wrap:wrap;gap:6px">
+        ${a?fotoEl(a,'avatar'):'<div class="avatar">?</div>'}
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:13px;font-weight:700">${a?.nome||cobs[0].alunoNome}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${a?.turmas?.map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.hora+' '+t.nome:'';}).filter(Boolean).join(' · ')||''}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px">${mesesList}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;font-weight:800;color:var(--red)">${fmtR(total)}</div>
+          <div style="font-size:10px;color:var(--muted)">${cobs.length} ${cobs.length===1?'mês':'meses'} em aberto</div>
+        </div>
+      </div>`;
+    }).join('');
+}
+
 let cpagId = null;
 let cpagPgto = 'pix';
 let cpagMeses = 1;
