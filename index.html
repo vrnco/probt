@@ -3616,6 +3616,10 @@ function parsearTextoBancario(texto){
   const linhas = texto.split('\n').map(l=>l.trim()).filter(l=>l.length>4);
   const resultado = [];
   linhas.forEach(linha=>{
+    // Ignorar linhas de saldo (não são pagamentos)
+    const linhaLowCheck = linha.toLowerCase();
+    if(/saldo do dia|saldo anterior|saldo final|saldo em|saldo:/i.test(linha)) return;
+    if(/^\d{1,2}\s+de\s+/i.test(linha) && /saldo/i.test(linha)) return;
     const valorMatch = linha.match(/\b(\d{1,6}[,\.]\d{2})\b/g);
     const dataMatch  = linha.match(/\b(\d{2}\/\d{2}(?:\/\d{2,4})?)\b/);
     if(!valorMatch) return;
@@ -3731,6 +3735,8 @@ function renderExtratoLinhas(){
   const filtro = document.getElementById('ext-filtro-tipo')?.value || 'creditos';
   let lista = [...extratoLinhas].sort((a,b)=>(b.confirmado?0:1)-(a.confirmado?0:1));
 
+  // Sempre remove linhas de saldo independente do filtro
+  lista = lista.filter(l => !/saldo do dia|saldo anterior|saldo final/i.test(l.texto||l.nome||''));
   if(filtro==='creditos')    lista = lista.filter(l=> l.valor === null || l.valor === undefined || l.valor > 0);
   if(filtro==='identificados') lista = lista.filter(l=>l.confirmado||l.splitAlunos?.length);
   // Pendentes = não identificado OU identificado mas cobrança ainda não paga
@@ -3747,7 +3753,8 @@ function renderExtratoLinhas(){
     const conf = l.confirmado && l.scoreMatch >= 0.7;
     let status;
     if(isSplit){
-      status = `<span class="badge b-blue">👥 Split (${l.splitAlunos.length})</span>`;
+      const splitNomesBadge = l.splitAlunos.map(x=>x.aluno.nome.split(' ')[0]).join(' + ');
+      status = `<span class="badge b-blue" title="${l.splitAlunos.map(x=>x.aluno.nome).join(' + ')}">👥 ${splitNomesBadge}</span>`;
     } else if(a){
       const nomeExib = a.nome.split(' ').slice(0,2).join(' '); status = `<span class="badge ${conf?'b-green':'b-amber'}" title="${a.nome}">${conf?'✓':'?'} ${nomeExib}</span>`;
     } else {
@@ -3794,9 +3801,30 @@ function abrirMatch(lid){
   const l=extratoLinhas[lid];
   splitSelecionados=[];
   matchModoAtual='unico';
+
+  // Detecta possível split: valor ≈ múltiplo de mensalidades
+  let splitHint = '';
+  if(l.valor > 0){
+    const cobsMes = cobrancas.filter(c=>c.mes===document.getElementById('filtro-mes').value&&!c.pago);
+    // Encontra alunos cujo valor x2 ou x3 bate com o lançamento (tolerância 2%)
+    const multMatches = [];
+    for(let mult=2; mult<=4; mult++){
+      cobsMes.forEach(cob=>{
+        if(Math.abs(cob.valor*mult - l.valor) < l.valor*0.02){
+          const a=alunos.find(x=>x.id===cob.alunoId);
+          if(a) multMatches.push({a,mult,cob});
+        }
+      });
+    }
+    if(multMatches.length >= 2){
+      splitHint = `<div style="background:#e3f2fd;border-radius:6px;padding:6px 10px;font-size:11px;color:#0d47a1;margin-top:6px">💡 Valor parece ser ${multMatches[0].mult}x R$${multMatches[0].cob.valor} — pode ser pagamento conjunto. Use "Dividir entre 2+"</div>`;
+    }
+  }
+
   document.getElementById('match-info').innerHTML=`
     <div style="font-size:13px;font-weight:700;margin-bottom:3px">${l.nomeRaw||l.texto.slice(0,60)}</div>
-    <div style="font-size:11px;color:var(--muted)">📅 ${l.data||'—'} &nbsp;·&nbsp; 💰 ${l.valor?fmtR(l.valor):'—'}</div>`;
+    <div style="font-size:11px;color:var(--muted)">📅 ${l.data||'—'} &nbsp;·&nbsp; 💰 ${l.valor?fmtR(l.valor):'—'}</div>
+    ${splitHint}`;
   setMatchModo('unico');
   const buscaEl = document.getElementById('match-busca');
   if(buscaEl){ buscaEl.value = (l.nomeRaw||'').split(/[\s_]/)[0]||''; }
