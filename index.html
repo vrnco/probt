@@ -2667,6 +2667,22 @@ async function salvarAluno(){
     // Sync turmas.alunos
     const turmasAfetadas=turmas.filter(t=>t.alunos.includes(alunoParaSalvar.id)||(alunoParaSalvar.turmas||[]).includes(t.id));
     for(const t of turmasAfetadas) await sbPatch('turmas', t._sbId||t.id, {alunos:t.alunos});
+    // ── Sync diaVencimento e valor nas cobranças não pagas ──────────────────
+    const cobsDoAluno = cobrancas.filter(p =>
+      p.alunoId === alunoParaSalvar.id && !p.pago && !p.cancelado
+    );
+    const cobsAlterar = cobsDoAluno.filter(p =>
+      (alunoParaSalvar.diaVencimento && p.diaVencimento !== alunoParaSalvar.diaVencimento) ||
+      (alunoParaSalvar.valor && p.valor !== alunoParaSalvar.valor)
+    );
+    for(const cob of cobsAlterar){
+      if(alunoParaSalvar.valor) cob.valor = alunoParaSalvar.valor;
+      // diaVencimento fica no aluno, não na cobrança — já sincroniza via aluno
+      await sbSalvarCobranca(cob);
+    }
+    if(cobsAlterar.length > 0){
+      showToast(`🔄 ${cobsAlterar.length} cobrança${cobsAlterar.length>1?'s':''} sincronizada${cobsAlterar.length>1?'s':''} com o perfil`);
+    }
     salvarCacheLocal();
   }
 }
@@ -3300,7 +3316,7 @@ function renderCobrancas(){
   if(taxaEl){ taxaEl.textContent=taxa+'%'; taxaEl.style.color=taxa>=80?'var(--green)':taxa>=50?'var(--amber)':'var(--red)'; }
 
   // Filtro de status
-  if(status === 'pendentes') lista = lista.filter(p => !p.pago);
+  if(status === 'pendentes') lista = lista.filter(p => !p.pago && !p.cancelado);
   if(status === 'pagos')     lista = lista.filter(p =>  p.pago);
 
   const c = document.getElementById('cobrancas-lista');
@@ -3308,7 +3324,7 @@ function renderCobrancas(){
 
   c.innerHTML = lista.map(p=>{
     const a = alunos.find(x=>x.id===p.alunoId);
-    return`<div class="fin-row">
+    return`<div class="fin-row" style="${p.cancelado?'opacity:0.5;':''}">
       ${a?fotoEl(a,'avatar'):'<div class="avatar">?</div>'}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600">${p.alunoNome}</div>
@@ -3319,12 +3335,17 @@ function renderCobrancas(){
       </div>
       <div style="text-align:right;min-width:70px">
         <div style="font-size:13px;font-weight:700">${fmtR(p.valor)}</div>
-        <span class="badge ${p.pago?'b-green':'b-red'}">${p.pago?'Pago':'Pendente'}</span>
+        <span class="badge ${p.cancelado?'b-gray':p.pago?'b-green':'b-red'}">${p.cancelado?'🚫 Cancelado':p.pago?'Pago':'Pendente'}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-        ${p.pago
-          ?`<button class="btn btn-xs" onclick="togglePag(${p.id})">Desfazer</button>`
-          :`<button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${p.id},renderCobrancas)">✅ Pago</button>`}
+        ${p.cancelado
+          ?`<button class="btn btn-xs" style="color:var(--muted)" onclick="reativarCobranca(${p.id})">↩ Reativar</button>`
+          :p.pago
+            ?`<button class="btn btn-xs" onclick="togglePag(${p.id})">Desfazer</button>`
+            :`<div style="display:flex;flex-direction:column;gap:3px">
+               <button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${p.id},renderCobrancas)">✅ Pago</button>
+               <button class="btn btn-xs" style="font-size:10px;color:var(--muted);border-color:var(--muted)" onclick="cancelarCobranca(${p.id})" title="Marcar como não será recebido">🚫 Cancelar</button>
+             </div>`}
       </div>
     </div>`;
   }).join('');
@@ -3338,7 +3359,7 @@ function renderDevedoresMesesAnteriores(alunosValidos){
   // Agrupar cobranças não pagas por aluno, só meses anteriores
   const devedores = {};
   cobrancas
-    .filter(p => !p.pago && alunosValidos.has(p.alunoId) && p.mes < mesAtual)
+    .filter(p => !p.pago && !p.cancelado && alunosValidos.has(p.alunoId) && p.mes < mesAtual)
     .forEach(p => {
       if(!devedores[p.alunoId]) devedores[p.alunoId] = {cobs:[], total:0};
       devedores[p.alunoId].cobs.push(p);
@@ -3473,6 +3494,28 @@ async function confirmarPagamento(){
   showToast(mesesPagar>1 ? `✅ ${mesesPagar} meses pagos! Total: ${fmtR(total)}` : '✅ Pagamento confirmado!');
 }
 
+
+async function cancelarCobranca(id){
+  const p = cobrancas.find(x=>x.id===id); if(!p) return;
+  const a = alunos.find(x=>x.id===p.alunoId);
+  const nome = a?.nome?.split(' ')[0] || p.alunoNome;
+  if(!confirm(`Cancelar cobrança de ${nome} — ${mesNome(p.mes)}?\n\nIsso indica que o valor não será recebido.\nA cobrança ficará visível com status "Cancelado".`)) return;
+  p.cancelado = true;
+  p.pago = false;
+  await sbSalvarCobranca(p);
+  salvarCacheLocal();
+  renderCobrancas();
+  showToast(`🚫 Cobrança de ${nome} cancelada`);
+}
+
+async function reativarCobranca(id){
+  const p = cobrancas.find(x=>x.id===id); if(!p) return;
+  p.cancelado = false;
+  await sbSalvarCobranca(p);
+  salvarCacheLocal();
+  renderCobrancas();
+  showToast('↩ Cobrança reativada');
+}
 
 async function togglePag(id){
   // Para desfazer (já pago → pendente): não precisa de modal
@@ -4965,7 +5008,7 @@ function dispararTodosWA(){
 // ===================== EM ATRASO =====================
 function calcAtraso(aluno, mes){
   // Retorna {diasAtraso, dataVenc, cobPendente}
-  const cob = cobrancas.find(c=>c.alunoId===aluno.id && c.mes===mes && !c.pago);
+  const cob = cobrancas.find(c=>c.alunoId===aluno.id && c.mes===mes && !c.pago && !c.cancelado);
   if(!cob) return null;
   const dia = aluno.diaVencimento;
   if(!dia) return {diasAtraso:null, dataVenc:null, cobPendente:cob};
@@ -6155,7 +6198,8 @@ async function sbSalvarCobranca(c){
     valor:c.valor, pago:c.pago, data_pag:c.dataPag||null,
     pgto:c.pgto||'pix', turma:c.turma||'',
     msg_enviada_em:c.msgEnviadaEm||null,
-    msg_enviada_via:c.msgEnviadaVia||null
+    msg_enviada_via:c.msgEnviadaVia||null,
+    cancelado:c.cancelado||false
   };
   if(c._sbId){
     // Tem ID real do Supabase — atualiza
