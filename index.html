@@ -3556,7 +3556,7 @@ async function baixaSemReceber(){
   }
 
   closeModal('modal-confirmar-pag');
-  renderCobrancas();
+  _posAcaoPagamento(p.alunoId, cobParaCancelar);
   if(cpagCallback) cpagCallback();
   await Promise.all(cobParaCancelar.map(c=>sbSalvarCobranca(c)));
   salvarCacheLocal();
@@ -3589,13 +3589,38 @@ async function confirmarPagamento(){
   }
 
   closeModal('modal-confirmar-pag');
-  renderCobrancas();
+
+  // Atualiza a tela corretamente após pagamento
+  _posAcaoPagamento(p.alunoId, cobParaSalvar);
   if(cpagCallback) cpagCallback();
+
   await Promise.all(cobParaSalvar.map(c=>sbSalvarCobranca(c)));
   salvarCacheLocal();
   const total = cobParaSalvar.reduce((s,c)=>s+c.valor,0);
-  showToast(mesesPagar>1 ? `✅ ${mesesPagar} meses pagos! Total: ${fmtR(total)}` : '✅ Pagamento confirmado!');
+  const nome = a?.nome?.split(' ')[0] || p.alunoNome;
+  showToast(mesesPagar>1
+    ? `✅ ${nome} — ${mesesPagar} meses pagos! ${fmtR(total)}`
+    : `✅ ${nome} — ${mesNome(p.mes)} pago!`);
 }
+
+// Após pagamento: verifica se aluno ainda tem meses em aberto e exibe aviso
+function _posAcaoPagamento(alunoId, cobsPagas){
+  const aindaEmAberto = cobrancas.filter(c=>c.alunoId===alunoId&&!c.pago&&!c.cancelado);
+  const statusEl = document.getElementById('filtro-cob-status');
+  if(statusEl && statusEl.value==='devedores'){
+    // Recarrega a lista de devedores (aluno some se não tem mais dívidas anteriores — correto)
+    renderCobrancas();
+  } else {
+    renderCobrancas();
+  }
+  renderAtraso();
+  // Se ainda tem meses abertos, mostra aviso
+  if(aindaEmAberto.length > 0){
+    const nomes = aindaEmAberto.map(c=>mesNome(c.mes)).join(', ');
+    showToast(`⚠️ Ainda em aberto: ${nomes}`, 'amber');
+  }
+}
+
 
 
 async function cancelarCobranca(id){
@@ -4922,15 +4947,18 @@ function exportarDados(){
 }
 
 // ---------- TOAST ----------
-function showToast(msg){
+function showToast(msg, cor){
+  // cor: 'green' (padrão), 'red', 'amber'
+  const bg = cor==='red'?'#c62828':cor==='amber'?'#e65100':'#222';
   let t = document.getElementById('cfg-toast');
   if(!t){
     t = document.createElement('div');
     t.id = 'cfg-toast';
-    t.style = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap';
+    t.style = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:'+bg+';color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap';
     document.body.appendChild(t);
   }
   t.textContent = msg;
+  t.style.background = bg;
   t.style.opacity = '1';
   clearTimeout(t._hide);
   t._hide = setTimeout(()=>t.style.opacity='0', 2400);
