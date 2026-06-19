@@ -1588,7 +1588,8 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   <div class="modal" style="max-width:420px">
     <div class="modal-title">✅ Confirmar pagamento</div>
     <button class="modal-close" onclick="closeModal('modal-confirmar-pag')">×</button>
-    <div id="cpag-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
+    <div id="cpag-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:10px"></div>
+    <div id="cpag-mes-sel" style="display:none;margin-bottom:10px"></div>
     <label>Forma de pagamento</label>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="cpag-pgto-btns">
       <button class="dia-btn on" onclick="setCpagPgto(this,'pix')">💠 PIX</button>
@@ -3436,12 +3437,38 @@ function abrirConfirmarPag(cobId, callback){
   const p = cobrancas.find(x=>x.id===cobId); if(!p)return;
   const a = alunos.find(x=>x.id===p.alunoId);
   cpagId = cobId;
-  cpagPgto = p.pgto||'pix';
+  cpagPgto = a?.pgto || p.pgto||'pix';
   cpagMeses = 1;
   cpagCallback = callback||null;
+
+  // Detectar todos os meses em aberto deste aluno
+  const now = new Date();
+  const mesAtualKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const cobsEmAberto = cobrancas
+    .filter(c => c.alunoId===p.alunoId && !c.pago && !c.cancelado)
+    .sort((a,b) => a.mes.localeCompare(b.mes)); // ordem cronológica
+
+  // Mostrar seletor de mês se houver mais de 1 em aberto
+  const mesSelEl = document.getElementById('cpag-mes-sel');
+  if(cobsEmAberto.length > 1 && mesSelEl){
+    mesSelEl.style.display = 'block';
+    mesSelEl.innerHTML = `<label>Qual mês está pagando?</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">
+        ${cobsEmAberto.map(c=>`
+          <button class="dia-btn${c.id===cobId?' on':''}"
+            onclick="trocarMesPag(${c.id},this)"
+            style="font-size:12px">
+            ${mesNome(c.mes)}<br>
+            <span style="font-size:10px;opacity:.8">${fmtR(c.valor)}</span>
+          </button>`).join('')}
+      </div>`;
+  } else {
+    if(mesSelEl) mesSelEl.style.display = 'none';
+  }
+
   document.getElementById('cpag-info').innerHTML=`
     <div style="font-size:14px;font-weight:700;margin-bottom:4px">${p.alunoNome}</div>
-    <div style="font-size:13px;color:var(--muted)">${fmtR(p.valor)} · ${mesNome(p.mes)}</div>`;
+    <div style="font-size:13px;color:var(--muted)" id="cpag-mes-label">${fmtR(p.valor)} · ${mesNome(p.mes)}</div>`;
   document.getElementById('cpag-data').value = today();
   // Reset forma padrão
   document.querySelectorAll('#cpag-pgto-btns .dia-btn').forEach(b=>b.classList.remove('on'));
@@ -3454,6 +3481,23 @@ function abrirConfirmarPag(cobId, callback){
   document.getElementById('cpag-meses-preview').style.display='none';
   openModal('modal-confirmar-pag');
 }
+
+function trocarMesPag(cobId, btn){
+  // Troca qual mês será pago
+  cpagId = cobId;
+  const p = cobrancas.find(x=>x.id===cobId); if(!p) return;
+  // Atualiza label do info
+  const lbl = document.getElementById('cpag-mes-label');
+  if(lbl) lbl.textContent = `${fmtR(p.valor)} · ${mesNome(p.mes)}`;
+  // Highlight botão selecionado
+  btn.closest('div').querySelectorAll('.dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  // Reset seletor de quantidade de meses
+  cpagMeses = 1;
+  document.querySelectorAll('#cpag-meses-btns .dia-btn').forEach((b,i)=>b.classList.toggle('on',i===0));
+  document.getElementById('cpag-meses-preview').style.display='none';
+}
+
 
 function setCpagPgto(btn, pgto){
   cpagPgto = pgto;
