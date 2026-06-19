@@ -6370,28 +6370,59 @@ async function sbSalvarPresenca(p){
   await sbUpsert('presencas', payload);
 }
 async function sbSalvarCobranca(c){
-  const payload = {
+  const payloadBase = {
     aluno_id:c.alunoId, aluno_nome:c.alunoNome, mes:c.mes,
     valor:c.valor, pago:c.pago, data_pag:c.dataPag||null,
     pgto:c.pgto||'pix', turma:c.turma||'',
     msg_enviada_em:c.msgEnviadaEm||null,
-    msg_enviada_via:c.msgEnviadaVia||null,
-    cancelado:c.cancelado||false,
-    obs:c.obs||null
+    msg_enviada_via:c.msgEnviadaVia||null
   };
+  // Tenta incluir colunas novas; se falhar, salva sem elas
+  const payloadFull = {...payloadBase, cancelado:c.cancelado||false, obs:c.obs||null};
+
+  async function tentarPatch(id, payload){
+    const r = await fetch(`${SB_URL}/rest/v1/cobrancas?id=eq.${id}`,{
+      method:'PATCH', headers:sbHeaders({'Prefer':'return=minimal'}), body:JSON.stringify(payload)
+    });
+    if(r.ok) return true;
+    const txt = await r.text();
+    // Se falhou por coluna inexistente, tenta sem os campos novos
+    if(txt.includes('cancelado')||txt.includes('obs')){
+      const r2 = await fetch(`${SB_URL}/rest/v1/cobrancas?id=eq.${id}`,{
+        method:'PATCH', headers:sbHeaders({'Prefer':'return=minimal'}), body:JSON.stringify(payloadBase)
+      });
+      if(r2.ok){ console.warn('⚠️ Salvo sem cancelado/obs — rode o SQL de migração no Supabase'); return true; }
+    }
+    console.error('sbSalvarCobranca PATCH falhou:', r.status, txt.substring(0,150));
+    return false;
+  }
+
+  async function tentarPost(payload){
+    const r = await fetch(`${SB_URL}/rest/v1/cobrancas`,{
+      method:'POST', headers:sbHeaders({'Prefer':'return=representation'}), body:JSON.stringify(payload)
+    });
+    if(r.ok){ const d=await r.json(); if(d&&d[0]){c._sbId=d[0].id;c.id=d[0].id;} return true; }
+    const txt = await r.text();
+    if(txt.includes('cancelado')||txt.includes('obs')){
+      const r2 = await fetch(`${SB_URL}/rest/v1/cobrancas`,{
+        method:'POST', headers:sbHeaders({'Prefer':'return=representation'}), body:JSON.stringify(payloadBase)
+      });
+      if(r2.ok){ const d=await r2.json(); if(d&&d[0]){c._sbId=d[0].id;c.id=d[0].id;} return true; }
+    }
+    console.error('sbSalvarCobranca POST falhou:', r.status, txt.substring(0,150));
+    return false;
+  }
+
   if(c._sbId){
-    // Tem ID real do Supabase — atualiza
-    await sbPatch('cobrancas', c._sbId, payload);
-  } else if(c.id && typeof c.id === 'number' && c.id > 10000){
-    // ID grande provavelmente veio do Supabase (serial auto-increment)
+    await tentarPatch(c._sbId, payloadFull);
+  } else if(c.id && typeof c.id==='number' && c.id>10000){
     c._sbId = c.id;
-    await sbPatch('cobrancas', c._sbId, payload);
+    await tentarPatch(c._sbId, payloadFull);
   } else {
-    // Não existe no banco — insere
-    const r = await sbPost('cobrancas', payload);
-    if(r&&r[0]){ c._sbId=r[0].id; c.id=r[0].id; }
+    await tentarPost(payloadFull);
   }
 }
+
 async function sbSalvarAviso(av){
   const payload = { aluno_id:av.alunoId, turma_id:av.turmaId, data:av.data, obs:av.obs||null, gerar_credito:av.gerarCredito, registrado_em:av.registradoEm||today() };
   const r=await sbPost('avisos_falta', payload); if(r&&r[0]) av.id=r[0].id;
