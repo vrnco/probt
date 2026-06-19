@@ -1270,6 +1270,27 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   </div>
 </div>
 
+<!-- Modal Cancelar Atraso (Não vai receber) -->
+<div id="modal-cancelar-atraso" class="modal-bg">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🚫 Não vai receber</div>
+    <button class="modal-close" onclick="closeModal('modal-cancelar-atraso')">×</button>
+    <div id="catr-info" style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px"></div>
+    <label>Motivo (obrigatório)</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="catr-motivo-btns">
+      <button class="dia-btn" onclick="setCatrMotivo(this,'Aluno cancelou')">Aluno cancelou</button>
+      <button class="dia-btn" onclick="setCatrMotivo(this,'Parou sem avisar')">Parou sem avisar</button>
+      <button class="dia-btn" onclick="setCatrMotivo(this,'Acordo')">Acordo</button>
+      <button class="dia-btn" onclick="setCatrMotivo(this,'Outro')">Outro</button>
+    </div>
+    <input type="text" id="catr-motivo-texto" placeholder="Descreva o motivo..." style="margin-bottom:14px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeModal('modal-cancelar-atraso')">Voltar</button>
+      <button class="btn btn-sm" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="confirmarCancelarAtraso()">🚫 Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">×</button>
@@ -1586,8 +1607,9 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
     <div id="cpag-meses-preview" style="display:none;background:#e8f5e9;border-radius:8px;padding:8px 12px;font-size:12px;color:#2e7d32;margin-bottom:10px"></div>
     <label>Data do pagamento</label>
     <input type="date" id="cpag-data">
-    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn btn-sm" onclick="closeModal('modal-confirmar-pag')">Cancelar</button>
+      <button class="btn btn-sm" style="color:var(--muted);border-color:var(--muted)" onclick="baixaSemReceber()" title="Aluno não treinou neste mês — remove da lista sem contar como recebido">🚫 Baixa sem receber</button>
       <button class="btn btn-success btn-sm" onclick="confirmarPagamento()">✅ Confirmar</button>
     </div>
   </div>
@@ -3460,6 +3482,45 @@ function setCpagMeses(btn, n){
   prev.innerHTML = `💰 <strong>${fmtR(total)}</strong> · ${mesesList.join(', ')}`;
 }
 
+as
+
+async function baixaSemReceber(){
+  // Cancela a cobrança sem contar como recebido (aluno não treinou no mês)
+  const p = cobrancas.find(x=>x.id===cpagId); if(!p) return;
+  const a = alunos.find(x=>x.id===p.alunoId);
+  const nome = a?.nome?.split(' ')[0] || p.alunoNome;
+  const mesesPagar = cpagMeses || 1;
+  const cobParaCancelar = [];
+  const [y,m] = p.mes.split('-').map(Number);
+
+  for(let i=0; i<mesesPagar; i++){
+    const d = new Date(y, m-1+i, 1);
+    const mesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    let cob = cobrancas.find(c=>c.alunoId===p.alunoId && c.mes===mesKey);
+    if(!cob){
+      // Cria cobrança para o mês se não existe
+      const novaCob = {
+        id:cobIdC++, _sbId:null, alunoId:p.alunoId, alunoNome:p.alunoNome,
+        mes:mesKey, valor:a?.valor||p.valor, pago:false, dataPag:null,
+        pgto:cpagPgto, turma:p.turma||''
+      };
+      cobrancas.push(novaCob);
+      cob = novaCob;
+    }
+    cob.cancelado = true;
+    cob.pago = false;
+    cob.obs = 'Baixa sem receber — aluno não treinou no mês';
+    cobParaCancelar.push(cob);
+  }
+
+  closeModal('modal-confirmar-pag');
+  renderCobrancas();
+  if(cpagCallback) cpagCallback();
+  await Promise.all(cobParaCancelar.map(c=>sbSalvarCobranca(c)));
+  salvarCacheLocal();
+  const mesesStr = mesesPagar > 1 ? `${mesesPagar} meses` : mesNome(p.mes);
+  showToast(`🚫 ${nome} — baixa sem receber (${mesesStr})`);
+}
 async function confirmarPagamento(){
   const p = cobrancas.find(x=>x.id===cpagId); if(!p)return;
   const a = alunos.find(x=>x.id===p.alunoId);
@@ -3508,6 +3569,51 @@ async function cancelarCobranca(id){
   showToast(`🚫 Cobrança de ${nome} cancelada`);
 }
 
+as
+
+let catrCobId = null;
+let catrMotivo = '';
+
+function abrirCancelarAtraso(cobId){
+  const cob = cobrancas.find(x=>x.id===cobId); if(!cob) return;
+  const a = alunos.find(x=>x.id===cob.alunoId);
+  catrCobId = cobId;
+  catrMotivo = '';
+  document.getElementById('catr-info').innerHTML =
+    `<div style="font-weight:700">${a?.nome||cob.alunoNome}</div>
+     <div style="font-size:12px;color:var(--muted)">${fmtR(cob.valor)} · ${mesNome(cob.mes)}</div>`;
+  document.querySelectorAll('#catr-motivo-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('catr-motivo-texto').value = '';
+  openModal('modal-cancelar-atraso');
+}
+
+function setCatrMotivo(btn, motivo){
+  catrMotivo = motivo;
+  document.querySelectorAll('#catr-motivo-btns .dia-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  if(motivo !== 'Outro'){
+    document.getElementById('catr-motivo-texto').value = motivo;
+  } else {
+    document.getElementById('catr-motivo-texto').value = '';
+    document.getElementById('catr-motivo-texto').focus();
+  }
+}
+
+async function confirmarCancelarAtraso(){
+  const texto = document.getElementById('catr-motivo-texto').value.trim();
+  if(!texto){ showToast('Informe o motivo', 'red'); return; }
+  const cob = cobrancas.find(x=>x.id===catrCobId); if(!cob) return;
+  const a = alunos.find(x=>x.id===cob.alunoId);
+  cob.cancelado = true;
+  cob.pago = false;
+  cob.obs = texto; // salva justificativa na cobrança
+  closeModal('modal-cancelar-atraso');
+  await sbSalvarCobranca(cob);
+  salvarCacheLocal();
+  renderAtraso();
+  renderCobrancas();
+  showToast(`🚫 ${a?.nome?.split(' ')[0]||cob.alunoNome} removido da lista — "${texto}"`);
+}
 async function reativarCobranca(id){
   const p = cobrancas.find(x=>x.id===id); if(!p) return;
   p.cancelado = false;
@@ -5118,7 +5224,10 @@ function renderAtraso(){
               💬 Cobrar
             </a>`
           :`<span style="font-size:11px;color:var(--muted)">Sem tel.</span>`}
-        ${cob?`<button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${cob.id},()=>{renderAtraso();renderCobrancas();})">✓ Marcar pago</button>`:''}
+        ${cob?`
+          <button class="btn btn-xs btn-success" onclick="abrirConfirmarPag(${cob.id},()=>{renderAtraso();renderCobrancas();})">✅ Pago</button>
+          <button class="btn btn-xs" style="font-size:10px;color:var(--muted);border-color:var(--muted);margin-top:2px" onclick="abrirCancelarAtraso(${cob.id})">🚫 Não vai receber</button>
+        `:''}
       </div>
     </div>`;
   }).join('');
@@ -6146,7 +6255,7 @@ window.addEventListener('offline', ()=>{
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
 function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', patrocinado:r.patrocinado||false, patrocinador:r.patrocinador||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||180), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
 function mapPresenca(r){ return { id:r.id, _sbId:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
-function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'', msgEnviadaEm:r.msg_enviada_em||null, msgEnviadaVia:r.msg_enviada_via||null }; }
+function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'', msgEnviadaEm:r.msg_enviada_em||null, msgEnviadaVia:r.msg_enviada_via||null, cancelado:r.cancelado||false, obs:r.obs||null };  }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
 function mapConteudo(r){ return { id:r.id, titulo:r.titulo, categoria:r.categoria||'golpe', golpe:r.golpe||'', nivel:r.nivel||'todos', duracao:r.duracao||'', objetivo:r.objetivo||'', descricao:r.descricao||'', dicas:r.dicas||'', tags:r.tags||[], midias:r.midias||[], criado:r.criado||r.created_at?.slice(0,10)||'' }; }
 
@@ -6199,7 +6308,8 @@ async function sbSalvarCobranca(c){
     pgto:c.pgto||'pix', turma:c.turma||'',
     msg_enviada_em:c.msgEnviadaEm||null,
     msg_enviada_via:c.msgEnviadaVia||null,
-    cancelado:c.cancelado||false
+    cancelado:c.cancelado||false,
+    obs:c.obs||null
   };
   if(c._sbId){
     // Tem ID real do Supabase — atualiza
