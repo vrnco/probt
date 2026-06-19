@@ -3482,8 +3482,6 @@ function setCpagMeses(btn, n){
   prev.innerHTML = `💰 <strong>${fmtR(total)}</strong> · ${mesesList.join(', ')}`;
 }
 
-as
-
 async function baixaSemReceber(){
   // Cancela a cobrança sem contar como recebido (aluno não treinou no mês)
   const p = cobrancas.find(x=>x.id===cpagId); if(!p) return;
@@ -3568,8 +3566,6 @@ async function cancelarCobranca(id){
   renderCobrancas();
   showToast(`🚫 Cobrança de ${nome} cancelada`);
 }
-
-as
 
 let catrCobId = null;
 let catrMotivo = '';
