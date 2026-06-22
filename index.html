@@ -3987,12 +3987,19 @@ function processarLinhasExtrato(linhasRaw){
     });
 
     const cobranca = alunoMatch
-      ? cobrancas.find(c=>c.alunoId===alunoMatch.id&&c.mes===mesAtual&&!c.pago)||null
+      ? cobrancas.find(c=>c.alunoId===alunoMatch.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado)||null
       : null;
 
-    // confirmado=false por padrão — só vira true quando usuário confirma manualmente
-    // alunoMatch é apenas sugestão automática (badge amarelo "?")
-    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:false, scoreMatch:scoreMax});
+    // confirmado=true automaticamente se o match veio de um APELIDO salvo (alta confiança)
+    // confirmado=false se foi match por nome genérico (sugestão)
+    let autoConfirmado = false;
+    if(alunoMatch && nNorm){
+      const apelidosAluno = (alunoMatch.apelidos||[]).map(ap=>normalize(ap));
+      // Verifica se o texto do lançamento contém algum apelido salvo
+      autoConfirmado = apelidosAluno.some(ap => ap.length > 4 && nNorm.includes(ap));
+    }
+
+    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, scoreMatch:scoreMax});
   });
 
   const conf = extratoLinhas.filter(l=>l.confirmado).length;
@@ -4294,43 +4301,54 @@ function confirmarMatch(alunoId){
   const a=alunos.find(x=>x.id===alunoId); if(!a)return;
   l.alunoMatch=a; l.confirmado=true; l.scoreMatch=1; l.splitAlunos=null;
   const mesAtual=document.getElementById('filtro-mes').value;
-  l.cobranca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago)||null;
-  // Adiciona nome do extrato como apelido automaticamente
+  l.cobranca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado)||null;
+
+  // Adiciona nome do extrato como apelido automaticamente (para auto-confirmar na próxima vez)
   const nNorm=normalize(l.nomeRaw||'');
-  if(nNorm&&!(a.apelidos||[]).includes(nNorm)){
+  if(nNorm&&nNorm.length>4&&!(a.apelidos||[]).map(ap=>normalize(ap)).includes(nNorm)){
     if(!a.apelidos)a.apelidos=[];
     a.apelidos.push(nNorm);
     sbSalvarAluno(a).then(()=>salvarCacheLocal());
   }
+
   closeModal('modal-match');
   renderExtratoLinhas();
-  showToast(`✅ Vinculado a ${a.nome.split(' ')[0]}!`);
+
+  // Dá baixa imediata na cobrança ao confirmar identificação
+  if(l.cobranca && !l.cobranca.pago){
+    l.cobranca.pago=true;
+    l.cobranca.dataPag=today();
+    sbSalvarCobranca(l.cobranca).then(()=>{
+      salvarCacheLocal();
+      renderCobrancas();
+      showToast(`✅ ${a.nome.split(' ')[0]} — identificado e baixa aplicada!`);
+    });
+  } else {
+    showToast(`✅ Vinculado a ${a.nome.split(' ')[0]}! (sem cobrança pendente neste mês)`);
+  }
 }
 
 async function aplicarBaixas(){
   let count=0;
   const cobParaSalvar=[];
-  extratoLinhas.forEach(l=>{
-    const cb=document.getElementById('extc-'+l.id);
-    if(cb&&cb.checked){
-      if(l.splitAlunos&&l.splitAlunos.length){
-        l.splitAlunos.forEach(s=>{
-          const cob=cobrancas.find(c=>c.id===s.cobId);
-          if(cob&&!cob.pago){cob.pago=true;cob.dataPag=today();count++;cobParaSalvar.push(cob);}
-        });
-      } else if(l.cobranca&&!l.cobranca.pago){
-        l.cobranca.pago=true;l.cobranca.dataPag=today();count++;cobParaSalvar.push(l.cobranca);
-      }
+  // Aplica baixa em todos os lançamentos CONFIRMADOS com cobrança não paga
+  extratoLinhas.filter(l=>l.confirmado).forEach(l=>{
+    if(l.splitAlunos&&l.splitAlunos.length){
+      l.splitAlunos.forEach(s=>{
+        const cob=cobrancas.find(c=>c.id===s.cobId);
+        if(cob&&!cob.pago){cob.pago=true;cob.dataPag=today();count++;cobParaSalvar.push(cob);}
+      });
+    } else if(l.cobranca&&!l.cobranca.pago){
+      l.cobranca.pago=true;l.cobranca.dataPag=today();count++;cobParaSalvar.push(l.cobranca);
     }
   });
+  if(!count){showToast('Nenhuma baixa a aplicar — confirme as identificações primeiro','amber');return;}
   renderCobrancas();
-  document.getElementById('extrato-result').style.display='none';
-  const inp=document.getElementById('extrato-input');if(inp)inp.value='';
-  showToast(count+' baixa(s) aplicada(s)! Salvando...');
-  // Salva todas no Supabase em paralelo
+  renderAtraso();
+  showToast(`✅ ${count} baixa(s) aplicada(s)! Salvando...`);
   await Promise.all(cobParaSalvar.map(c=>sbSalvarCobranca(c)));
   salvarCacheLocal();
-  if(count>0) showToast('✅ '+count+' baixa(s) gravada(s) no banco!');
+  showToast(`✅ ${count} pagamento(s) salvo(s) no banco!`);
 }
 
 // ---- LEGACY alias ----
