@@ -584,6 +584,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
         <option value="todos">Todos</option>
         <option value="pendentes">⏳ Só pendentes</option>
         <option value="pagos">✅ Só pagos</option>
+        <option value="cancelados">🚫 Baixa sem receber</option>
         <option value="devedores">🔴 Devedores de meses anteriores</option>
       </select>
       <button class="btn btn-sm" onclick="gerarExtrato()">Gerar extrato</button>
@@ -3338,7 +3339,14 @@ function renderCobrancas(){
     return;
   }
 
-  let lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
+  // Para cancelados: inclui TODOS os meses (não só o selecionado)
+  let lista;
+  if(status === 'cancelados'){
+    lista = cobrancas.filter(p => p.cancelado && alunosValidos.has(p.alunoId))
+      .sort((a,b) => b.mes.localeCompare(a.mes)); // mais recente primeiro
+  } else {
+    lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
+  }
 
   // Stats sempre sobre o mês completo (antes do filtro de status)
   const total = lista.reduce((s,p)=>s+p.valor, 0);
@@ -3351,8 +3359,9 @@ function renderCobrancas(){
   if(taxaEl){ taxaEl.textContent=taxa+'%'; taxaEl.style.color=taxa>=80?'var(--green)':taxa>=50?'var(--amber)':'var(--red)'; }
 
   // Filtro de status
-  if(status === 'pendentes') lista = lista.filter(p => !p.pago && !p.cancelado);
-  if(status === 'pagos')     lista = lista.filter(p =>  p.pago);
+  if(status === 'pendentes')  lista = lista.filter(p => !p.pago && !p.cancelado);
+  if(status === 'pagos')      lista = lista.filter(p =>  p.pago);
+  if(status === 'cancelados') lista = lista.filter(p =>  p.cancelado);
 
   const c = document.getElementById('cobrancas-lista');
   if(!lista.length){ c.innerHTML='<div class="empty">Sem cobranças</div>'; return; }
@@ -3363,7 +3372,10 @@ function renderCobrancas(){
       ${a?fotoEl(a,'avatar'):'<div class="avatar">?</div>'}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600">${p.alunoNome}</div>
-        <div style="font-size:11px;color:var(--muted)">${p.turma} · ${pgtoLabel(p.pgto)}</div>
+        <div style="font-size:11px;color:var(--muted)">${p.turma} · ${pgtoLabel(p.pgto)}${status==='cancelados'?' · '+mesNome(p.mes):''}</div>
+        ${p.cancelado && p.obs
+          ?`<div style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">📝 ${p.obs}</div>`
+          :''}
         ${p.pago && p.dataPag
           ?`<div style="font-size:10px;color:var(--green);margin-top:2px">
               ✅ Pago em ${fmtD(p.dataPag)}${p.origemExtrato?' · 📋 via extrato':''}
