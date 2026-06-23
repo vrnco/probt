@@ -4312,18 +4312,51 @@ function toggleSplitAluno(alunoId){
   renderMatchListaSplit();
 }
 
-function confirmarSplit(){
+async function confirmarSplit(){
   if(!splitSelecionados.length){showToast('Selecione ao menos um aluno.');return;}
   const l=extratoLinhas[matchLancamento]; if(!l)return;
   l.splitAlunos=[...splitSelecionados];
   l.confirmado=true;
   l.scoreMatch=1;
-  // Para o checkbox de baixa funcionar, aponta para a primeira cobrança
   if(splitSelecionados[0]?.cobId){
     l.cobranca=cobrancas.find(c=>c.id===splitSelecionados[0].cobId)||null;
   }
   closeModal('modal-match');
   renderExtratoLinhas();
+
+  // Dá baixa em TODAS as cobranças do split imediatamente
+  const dataPag = l.data ? converterDataBR(l.data) : today();
+  const cobParaSalvar = [];
+  const nomesConfirmados = [];
+
+  for(const s of splitSelecionados){
+    const cob = cobrancas.find(c=>c.id===s.cobId);
+    if(cob && !cob.pago){
+      cob.pago = true;
+      cob.dataPag = dataPag;
+      cob.origemExtrato = true;
+      cobParaSalvar.push(cob);
+    }
+    if(s.aluno) nomesConfirmados.push(s.aluno.nome.split(' ')[0]);
+
+    // Salva apelido para auto-confirmar na próxima vez
+    const nNorm = normalize(l.nomeRaw||'');
+    if(s.aluno && nNorm && nNorm.length>4 && !(s.aluno.apelidos||[]).map(ap=>normalize(ap)).includes(nNorm)){
+      if(!s.aluno.apelidos) s.aluno.apelidos=[];
+      s.aluno.apelidos.push(nNorm);
+      sbSalvarAluno(s.aluno).then(()=>salvarCacheLocal());
+    }
+  }
+
+  if(cobParaSalvar.length){
+    await Promise.all(cobParaSalvar.map(c=>sbSalvarCobranca(c)));
+    salvarCacheLocal();
+    renderCobrancas();
+    renderAtraso();
+    showToast(`✅ ${nomesConfirmados.join(' + ')} — baixas aplicadas!`);
+  } else {
+    showToast(`✅ ${nomesConfirmados.join(' + ')} — vinculados (sem cobrança pendente)`);
+  }
 }
 
 function confirmarMatch(alunoId){
@@ -4365,13 +4398,18 @@ async function aplicarBaixas(){
   const cobParaSalvar=[];
   // Aplica baixa em todos os lançamentos CONFIRMADOS com cobrança não paga
   extratoLinhas.filter(l=>l.confirmado).forEach(l=>{
+    const dataPag = l.data ? converterDataBR(l.data) : today();
     if(l.splitAlunos&&l.splitAlunos.length){
       l.splitAlunos.forEach(s=>{
         const cob=cobrancas.find(c=>c.id===s.cobId);
-        if(cob&&!cob.pago){cob.pago=true;cob.dataPag=today();count++;cobParaSalvar.push(cob);}
+        if(cob&&!cob.pago){
+          cob.pago=true; cob.dataPag=dataPag;
+          cob.origemExtrato=true; count++; cobParaSalvar.push(cob);
+        }
       });
     } else if(l.cobranca&&!l.cobranca.pago){
-      l.cobranca.pago=true;l.cobranca.dataPag=today();count++;cobParaSalvar.push(l.cobranca);
+      l.cobranca.pago=true; l.cobranca.dataPag=dataPag;
+      l.cobranca.origemExtrato=true; count++; cobParaSalvar.push(l.cobranca);
     }
   });
   if(!count){showToast('Nenhuma baixa a aplicar — confirme as identificações primeiro','amber');return;}
