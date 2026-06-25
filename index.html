@@ -3659,10 +3659,13 @@ async function cancelarCobranca(id){
   if(!confirm(`Cancelar cobrança de ${nome} — ${mesNome(p.mes)}?\n\nIsso indica que o valor não será recebido.\nA cobrança ficará visível com status "Cancelado".`)) return;
   p.cancelado = true;
   p.pago = false;
-  await sbSalvarCobranca(p);
-  salvarCacheLocal();
+  renderAtraso();
   renderCobrancas();
   showToast(`🚫 Cobrança de ${nome} cancelada`);
+  await sbSalvarCobranca(p);
+  localStorage.removeItem('bt_dados_cache_v1');
+  localStorage.removeItem('bt_dados_cache_ts');
+  salvarCacheLocal();
 }
 
 let catrCobId = null;
@@ -3700,13 +3703,22 @@ async function confirmarCancelarAtraso(){
   const a = alunos.find(x=>x.id===cob.alunoId);
   cob.cancelado = true;
   cob.pago = false;
-  cob.obs = texto; // salva justificativa na cobrança
+  cob.obs = texto;
   closeModal('modal-cancelar-atraso');
-  await sbSalvarCobranca(cob);
-  salvarCacheLocal();
+  // Atualiza tela imediatamente em memória
   renderAtraso();
   renderCobrancas();
   showToast(`🚫 ${a?.nome?.split(' ')[0]||cob.alunoNome} removido da lista — "${texto}"`);
+  // Salva no banco e invalida cache
+  const ok = await sbSalvarCobranca(cob);
+  if(ok !== false){
+    // Invalida cache para forçar reload limpo na próxima vez
+    localStorage.removeItem('bt_dados_cache_v1');
+    localStorage.removeItem('bt_dados_cache_ts');
+    salvarCacheLocal();
+  } else {
+    showToast('⚠️ Erro ao salvar — rode o SQL de migração no Supabase', 'red');
+  }
 }
 async function reativarCobranca(id){
   const p = cobrancas.find(x=>x.id===id); if(!p) return;
