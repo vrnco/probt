@@ -4188,13 +4188,13 @@ function renderMatchLista(){
     if(normalize(a.nome).includes(busca)) return true;
     return (a.apelidos||[]).some(ap=>normalize(ap).includes(busca));
   }).sort((a,b)=>{
-    const ca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
-    const cb2=cobrancas.find(c=>c.alunoId===b.id&&c.mes===mesAtual&&!c.pago);
+    const ca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
+    const cb2=cobrancas.find(c=>c.alunoId===b.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     return (cb2?1:0)-(ca?1:0);
   });
   const vazio = `<div class="empty">Nenhum aluno encontrado<br><span style="font-size:11px">Tente outro nome ou apelido</span></div>`;
   document.getElementById('match-lista').innerHTML = lista.length ? lista.map(a=>{
-    const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
+    const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     const apelidos=(a.apelidos||[]).filter(Boolean);
     return`<div class="fin-row" style="cursor:pointer;border-radius:8px;transition:.12s;padding:8px 4px"
         onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"
@@ -4286,7 +4286,7 @@ function renderMatchListaSplit(){
   const lista=alunos.filter(a=>a.ativo&&(!busca||normalize(a.nome).includes(busca)));
   const selIds=splitSelecionados.map(s=>s.alunoId);
   document.getElementById('match-lista-split').innerHTML=lista.map(a=>{
-    const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
+    const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     const sel=selIds.includes(a.id);
     return`<div class="fin-row" style="cursor:pointer;border-radius:8px;background:${sel?'var(--accent-light)':'transparent'};border:${sel?'1px solid var(--accent)':'1px solid transparent'};transition:.1s" onclick="toggleSplitAluno(${a.id})">
       <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'var(--accent)':'var(--border)'};background:${sel?'var(--accent)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -4318,7 +4318,7 @@ function toggleSplitAluno(alunoId){
   if(idx>=0){
     splitSelecionados.splice(idx,1);
   } else {
-    const cob=cobrancas.find(c=>c.alunoId===alunoId&&c.mes===mesAtual&&!c.pago);
+    const cob=cobrancas.find(c=>c.alunoId===alunoId&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     splitSelecionados.push({alunoId, cobId:cob?.id||null, aluno:alunos.find(a=>a.id===alunoId)});
   }
   renderMatchListaSplit();
@@ -5318,8 +5318,8 @@ function renderAtraso(){
   // Pega todos os alunos ativos, não patrocinados, com cobrança pendente neste mês
   const itens = [];
   alunos.filter(a=>a.ativo && !a.patrocinado).forEach(a=>{
-    // Verifica se tem cobrança pendente no mês atual
-    const cob = cobrancas.find(c=>c.alunoId===a.id && c.mes===mesAtual && !c.pago);
+    // Verifica se tem cobrança pendente no mês atual (não paga E não cancelada)
+    const cob = cobrancas.find(c=>c.alunoId===a.id && c.mes===mesAtual && !c.pago && !c.cancelado);
     if(!cob) return; // sem cobrança pendente no mês = ignora
     const res = calcAtraso(a, mesAtual);
     const diasAtraso = res ? res.diasAtraso : null;
@@ -5411,7 +5411,7 @@ function dispararWAAtraso(){
   if(!comTel.length){ showToast('Nenhum aluno em atraso com telefone.'); return; }
   if(!confirm(`Abrir WhatsApp para ${comTel.length} aluno(s) em atraso?\n\nSeu navegador pode solicitar permissão de pop-ups.`)) return;
   comTel.forEach((a,i)=>{
-    const cob = cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago);
+    const cob = cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     if(!cob) return;
     const msg = montarMsg(waCfg.msgCobranca, a, {cobranca:cob, vencimento:`dia ${a.diaVencimento||'?'}`});
     setTimeout(()=>{ window.open(linkWA(a.tel,msg),'_blank'); waNotificados[cob.id]=today(); }, i*700);
