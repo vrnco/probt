@@ -3377,10 +3377,12 @@ function renderCobrancas(){
           ?`<div style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">📝 ${p.obs}</div>`
           :''}
         ${p.pago && p.dataPag
-          ?`<div style="font-size:10px;color:var(--green);margin-top:2px">
-              ✅ Pago em ${fmtD(p.dataPag)}${p.origemExtrato?' · 📋 via extrato':''}
+          ?`<div style="font-size:11px;color:var(--green);margin-top:3px;font-weight:500">
+              📅 ${fmtD(p.dataPag)}${p.origemExtrato?' · via extrato':''}
             </div>`
-          :''}
+          : p.pago
+            ?`<div style="font-size:10px;color:var(--green);margin-top:2px">✅ Pago</div>`
+            :''}
         ${p.msgEnviadaEm
           ?`<div style="font-size:10px;color:var(--green);margin-top:2px">📩 Cobrança enviada ${fmtD(p.msgEnviadaEm)}${p.msgEnviadaVia?' · '+p.msgEnviadaVia:''} <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px" onclick="event.stopPropagation();limparMsgEnviada(${p.id})">×</button></div>`
           :`${!p.pago&&!p.cancelado?`<button class="btn btn-xs" style="margin-top:3px;font-size:10px;color:var(--muted)" onclick="registrarMsgEnviada(${p.id})">📩 Marcar cobrança enviada</button>`:''}`}
@@ -4087,7 +4089,7 @@ function renderExtratoLinhas(){
   // Sempre remove linhas de saldo independente do filtro
   lista = lista.filter(l => !/saldo do dia|saldo anterior|saldo final/i.test(l.texto||l.nome||''));
   if(filtro==='creditos')      lista = lista.filter(l=> l.valor === null || l.valor === undefined || l.valor > 0);
-  if(filtro==='identificados') lista = lista.filter(l=> l.confirmado); // só confirmados manualmente
+  if(filtro==='identificados') lista = lista.filter(l=> l.confirmado && l.manualConfirmado);
   // Pendentes = ainda não confirmados pelo usuário (inclui sugestões automáticas)
   if(filtro==='pendentes')     lista = lista.filter(l=>{
     if(l.valor !== null && l.valor !== undefined && l.valor <= 0) return false; // ignora débitos
@@ -4124,6 +4126,11 @@ function renderExtratoLinhas(){
           ${l.data?'📅 '+l.data+' &nbsp;':''}${l.valor?'💰 '+fmtR(l.valor):''}
           ${isSplit?`<span style="color:var(--accent)"> · ${splitNomes}</span>`:''}
         </div>
+        ${jaPago && (l.cobranca?.dataPag || l.splitAlunos?.length)
+          ? `<div style="font-size:10px;color:var(--green);margin-top:2px">
+              ✅ Baixa em ${fmtD(l.cobranca?.dataPag || l.splitAlunos?.[0] && cobrancas.find(c=>c.id===l.splitAlunos[0].cobId)?.dataPag)}
+             </div>`
+          : ''}
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         ${status}
