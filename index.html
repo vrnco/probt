@@ -3348,9 +3348,10 @@ function renderCobrancas(){
     lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId)).sort((a,b)=>a.alunoNome.localeCompare(b.alunoNome,'pt-BR'));
   }
 
-  // Stats sempre sobre o mês completo (antes do filtro de status)
-  const total = lista.reduce((s,p)=>s+p.valor, 0);
-  const rec   = lista.filter(p=>p.pago).reduce((s,p)=>s+p.valor, 0);
+  // Stats: exclui cancelados do total previsto
+  const listaSemCancelado = lista.filter(p=>!p.cancelado);
+  const total = listaSemCancelado.reduce((s,p)=>s+p.valor, 0);
+  const rec   = listaSemCancelado.filter(p=>p.pago).reduce((s,p)=>s+p.valor, 0);
   document.getElementById('fin-total').textContent = fmtR(total);
   document.getElementById('fin-rec').textContent   = fmtR(rec);
   document.getElementById('fin-pend').textContent  = fmtR(total-rec);
@@ -4053,8 +4054,8 @@ function processarLinhasExtrato(linhasRaw){
     extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, manualConfirmado:false, scoreMatch:scoreMax});
   });
 
-  const conf = extratoLinhas.filter(l=>l.confirmado).length;
-  const nconf = extratoLinhas.filter(l=>!l.confirmado).length;
+  const conf = extratoLinhas.filter(l=>l.confirmado && l.manualConfirmado).length;
+  const nconf = extratoLinhas.filter(l=>!l.manualConfirmado).length;
   const creditos = extratoLinhas.filter(l=>l.valor > 0 || l.valor === null || l.valor === undefined).length;
   const debitos  = extratoLinhas.filter(l=>l.valor !== null && l.valor !== undefined && l.valor <= 0).length;
   document.getElementById('ext-resumo-parse').textContent =
@@ -4092,8 +4093,8 @@ function renderExtratoLinhas(){
   if(filtro==='identificados') lista = lista.filter(l=> l.confirmado && l.manualConfirmado);
   // Pendentes = ainda não confirmados pelo usuário (inclui sugestões automáticas)
   if(filtro==='pendentes')     lista = lista.filter(l=>{
-    if(l.valor !== null && l.valor !== undefined && l.valor <= 0) return false; // ignora débitos
-    return !l.confirmado; // mostra tudo não confirmado
+    if(l.valor !== null && l.valor !== undefined && l.valor <= 0) return false;
+    return !l.manualConfirmado; // pendente = ainda não confirmado manualmente
   });
 
   c.innerHTML=lista.map(l=>{
@@ -4303,11 +4304,22 @@ async function removerApelido(alunoId, idx){
 function renderMatchListaSplit(){
   const busca=normalize(document.getElementById('match-busca-split')?.value||'');
   const mesAtual=document.getElementById('filtro-mes').value;
-  const lista=alunos.filter(a=>a.ativo&&(!busca||normalize(a.nome).includes(busca)));
+  // Sort alphabetically, with pending first
+  const lista=alunos
+    .filter(a=>a.ativo&&(!busca||normalize(a.nome).includes(busca)||
+      (a.apelidos||[]).some(ap=>normalize(ap).includes(busca))))
+    .sort((a,b)=>{
+      const ca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
+      const cb=cobrancas.find(c=>c.alunoId===b.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
+      if(ca&&!cb) return -1; if(!ca&&cb) return 1;
+      return a.nome.localeCompare(b.nome,'pt-BR');
+    });
   const selIds=splitSelecionados.map(s=>s.alunoId);
   document.getElementById('match-lista-split').innerHTML=lista.map(a=>{
     const cob=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
+    const cobPago=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&c.pago);
     const sel=selIds.includes(a.id);
+    const turmasAluno=(a.turmas||[]).map(tid=>{const t=turmas.find(x=>x.id===tid);return t?t.hora:'';}).filter(Boolean).join(' · ');
     return`<div class="fin-row" style="cursor:pointer;border-radius:8px;background:${sel?'var(--accent-light)':'transparent'};border:${sel?'1px solid var(--accent)':'1px solid transparent'};transition:.1s" onclick="toggleSplitAluno(${a.id})">
       <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'var(--accent)':'var(--border)'};background:${sel?'var(--accent)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
         ${sel?'<span style="color:#fff;font-size:12px;font-weight:700">✓</span>':''}
@@ -4315,9 +4327,15 @@ function renderMatchListaSplit(){
       ${fotoEl(a,'avatar')}
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600">${a.nome}</div>
-        <div style="font-size:11px;color:var(--muted)">${cob?fmtR(cob.valor)+' pendente':'Em dia'}</div>
+        <div style="font-size:11px;color:var(--muted)">${turmasAluno}</div>
+        <div style="font-size:10px;margin-top:1px">
+          ${cob?`<span style="color:var(--red)">⏳ ${mesNome(mesAtual)} R$${cob.valor} pendente</span>`
+            :cobPago?`<span style="color:var(--green)">✅ ${mesNome(mesAtual)} já pago em ${fmtD(cobPago.dataPag)||'?'}</span>`
+            :`<span style="color:var(--muted)">Sem cobrança em ${mesNome(mesAtual)}</span>`}
+        </div>
       </div>
-      ${cob?`<span class="badge b-red" style="font-size:10px">${fmtR(cob.valor)}</span>`:''}
+      ${cob?`<span class="badge b-red" style="font-size:10px">${fmtR(cob.valor)}</span>`:
+        cobPago?`<span class="badge b-green" style="font-size:10px">✅ Pago</span>`:''}
     </div>`;
   }).join('');
   // Atualiza resumo
