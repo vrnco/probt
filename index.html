@@ -2424,9 +2424,9 @@ function renderAlunos(){
   let ativosBase = alunos.filter(a=>a.ativo);
   if(filtroAlunoAtual==='sem-turma') ativosBase = semTurma;
 
-  const ativos   = ativosBase.filter(a=>normalize(a.nome).includes(busca));
+  const ativos   = ativosBase.filter(a=>normalize(a.nome).includes(busca)).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   const inativos = filtroAlunoAtual==='sem-turma' ? [] :
-    alunos.filter(a=>!a.ativo&&normalize(a.nome).includes(busca));
+    alunos.filter(a=>!a.ativo&&normalize(a.nome).includes(busca)).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
 
   const totalAtivos=alunos.filter(a=>a.ativo).length;
   const totalInativos=alunos.filter(a=>!a.ativo).length;
@@ -2952,8 +2952,8 @@ function renderTurmaPanel(){
     (turmaPanelData?` &nbsp;·&nbsp; ${fmtD(turmaPanelData)}`:'');
 
   // Lista de alunos
-  const alunosTurma=alunos.filter(a=>t.alunos.includes(a.id)&&a.ativo);
-  const inativos=alunos.filter(a=>t.alunos.includes(a.id)&&!a.ativo);
+  const alunosTurma=alunos.filter(a=>t.alunos.includes(a.id)&&a.ativo).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const inativos=alunos.filter(a=>t.alunos.includes(a.id)&&!a.ativo).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   document.getElementById('tp-vagas-info').textContent=
     `${alunosTurma.length}/${t.vagas} vagas ocupadas${inativos.length?' · '+inativos.length+' inativo(s)':''}`;
 
@@ -3343,9 +3343,9 @@ function renderCobrancas(){
   let lista;
   if(status === 'cancelados'){
     lista = cobrancas.filter(p => p.cancelado && alunosValidos.has(p.alunoId))
-      .sort((a,b) => b.mes.localeCompare(a.mes)); // mais recente primeiro
+      .sort((a,b) => a.alunoNome.localeCompare(b.alunoNome,'pt-BR') || b.mes.localeCompare(a.mes)); // mais recente primeiro
   } else {
-    lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId));
+    lista = cobrancas.filter(p => p.mes===mes && alunosValidos.has(p.alunoId)).sort((a,b)=>a.alunoNome.localeCompare(b.alunoNome,'pt-BR'));
   }
 
   // Stats sempre sobre o mês completo (antes do filtro de status)
@@ -3437,7 +3437,7 @@ function renderDevedoresMesesAnteriores(alunosValidos){
   }
 
   c.innerHTML = Object.entries(devedores)
-    .sort((a,b) => b[1].total - a[1].total) // mais devedor primeiro
+    .sort((a,b) => { const diff = b[1].total - a[1].total; return diff !== 0 ? diff : (alunos.find(x=>x.id===parseInt(a[0]))?.nome||'').localeCompare(alunos.find(x=>x.id===parseInt(b[0]))?.nome||'','pt-BR'); }) // mais devedor primeiro, mesmo valor = alfabético
     .map(([alunoId, {cobs, total}]) => {
       const a = alunos.find(x=>x.id===parseInt(alunoId));
       const mesesList = cobs
@@ -4204,7 +4204,9 @@ function renderMatchLista(){
   }).sort((a,b)=>{
     const ca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
     const cb2=cobrancas.find(c=>c.alunoId===b.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado);
-    return (cb2?1:0)-(ca?1:0);
+    const debtDiff = (cb2?1:0)-(ca?1:0);
+    if(debtDiff !== 0) return debtDiff;
+    return a.nome.localeCompare(b.nome,'pt-BR');
   });
   const vazio = `<div class="empty">Nenhum aluno encontrado<br><span style="font-size:11px">Tente outro nome ou apelido</span></div>`;
   document.getElementById('match-lista').innerHTML = lista.length ? lista.map(a=>{
@@ -5353,7 +5355,8 @@ function renderAtraso(){
   itens.sort((a,b)=>{
     const da = a.diasAtraso===null ? -999 : a.diasAtraso;
     const db = b.diasAtraso===null ? -999 : b.diasAtraso;
-    return db - da;
+    if(db !== da) return db - da;
+    return a.aluno.nome.localeCompare(b.aluno.nome,'pt-BR');
   });
 
   const total   = itens.length;
@@ -5465,7 +5468,7 @@ function registrarAvisoFaltaInterno(alunoId, turmaId, data, obs, gerarCred){
 function abrirAvisoFalta(){
   // preenche select de alunos
   const sel=document.getElementById('av-aluno');
-  sel.innerHTML='<option value="">— Selecione —</option>'+alunos.filter(a=>a.ativo).map(a=>`<option value="${a.id}">${a.nome}</option>`).join('');
+  sel.innerHTML='<option value="">— Selecione —</option>'+alunos.filter(a=>a.ativo).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')).map(a=>`<option value="${a.id}">${a.nome}</option>`).join('');
   document.getElementById('av-turma').innerHTML='<option value="">— Selecione o aluno primeiro —</option>';
   document.getElementById('av-data').value='';
   document.getElementById('av-obs').value='';
