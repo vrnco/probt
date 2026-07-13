@@ -3303,11 +3303,11 @@ function gerarCobrancasMesAtual(){
   const now = new Date();
   const mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   alunos.filter(a=>a.ativo && !a.patrocinado).forEach(a=>{
+    // Verifica se JÁ EXISTE cobrança para este aluno+mês (qualquer id)
     const jaExiste = cobrancas.find(c=>c.alunoId===a.id && c.mes===mes);
     // Corrige valor se a cobrança existe mas com valor errado
     if(jaExiste && a.valor && jaExiste.valor !== a.valor && !jaExiste.pago){
       jaExiste.valor = a.valor;
-      sbUpsertConfig; // não bloqueia — apenas atualiza em background
       sbPatch('cobrancas', jaExiste._sbId||jaExiste.id, {valor:a.valor}).catch(()=>{});
     }
     if(!jaExiste){
@@ -3608,15 +3608,19 @@ async function confirmarPagamento(){
     const mesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     let cob = cobrancas.find(c=>c.alunoId===p.alunoId && c.mes===mesKey);
     if(!cob){
-      const novaCob = {
-        id:cobIdC++, _sbId:null, alunoId:p.alunoId, alunoNome:p.alunoNome,
-        mes:mesKey, valor:a?.valor||p.valor, pago:false, dataPag:null,
-        pgto:cpagPgto, turma:p.turma||''
-      };
-      cobrancas.push(novaCob);
-      cob = novaCob;
+      // Dupla verificação — nunca criar se já existe no array (evita duplicatas)
+      const cobExistente = cobrancas.find(c=>c.alunoId===p.alunoId && c.mes===mesKey);
+      if(cobExistente){ cob = cobExistente; }
+      else {
+        const novaCob = {
+          id:cobIdC++, _sbId:null, alunoId:p.alunoId, alunoNome:p.alunoNome,
+          mes:mesKey, valor:a?.valor||p.valor, pago:false, dataPag:null,
+          pgto:cpagPgto, turma:p.turma||''
+        };
+        cobrancas.push(novaCob);
+        cob = novaCob;
+      }
     }
-    cob.pago=true; cob.dataPag=data; cob.pgto=cpagPgto;
     cobParaSalvar.push(cob);
   }
 
@@ -6539,6 +6543,20 @@ async function sbSalvarCobranca(c){
   }
 
   async function tentarPost(payload){
+    // Antes de inserir, verificar se já existe no Supabase (evita duplicatas)
+    const checkR = await fetch(
+      `${SB_URL}/rest/v1/cobrancas?aluno_id=eq.${payload.aluno_id}&mes=eq.${payload.mes}&select=id`,
+      {headers: sbHeaders()}
+    );
+    if(checkR.ok){
+      const existing = await checkR.json();
+      if(existing && existing.length > 0){
+        // Já existe — atualiza em vez de inserir
+        console.warn(`⚠️ Cobrança já existe para aluno ${payload.aluno_id} mês ${payload.mes} (id=${existing[0].id}) — atualizando`);
+        c._sbId = existing[0].id; c.id = existing[0].id;
+        return await tentarPatch(existing[0].id, payload);
+      }
+    }
     const r = await fetch(`${SB_URL}/rest/v1/cobrancas`,{
       method:'POST', headers:sbHeaders({'Prefer':'return=representation'}), body:JSON.stringify(payload)
     });
