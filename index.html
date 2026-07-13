@@ -4024,7 +4024,7 @@ function processarLinhasExtrato(linhasRaw){
       const chaves = [a.nome, ...(a.apelidos||[])];
       chaves.forEach(chave=>{
         const score = similarity(nNorm, normalize(chave));
-        if(score > scoreMax && score > 0.38){ scoreMax=score; alunoMatch=a; }
+        if(score > scoreMax && score > 0.55){ scoreMax=score; alunoMatch=a; }
       });
     });
 
@@ -4032,16 +4032,23 @@ function processarLinhasExtrato(linhasRaw){
       ? cobrancas.find(c=>c.alunoId===alunoMatch.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado)||null
       : null;
 
-    // confirmado=true automaticamente se o match veio de um APELIDO salvo (alta confiança)
-    // confirmado=false se foi match por nome genérico (sugestão)
+    // confirmado=true automaticamente APENAS se o apelido salvo é específico e bate exatamente
+    // Nunca auto-confirma por similaridade de nome — usuário deve confirmar manualmente
     let autoConfirmado = false;
     if(alunoMatch && nNorm){
       const apelidosAluno = (alunoMatch.apelidos||[]).map(ap=>normalize(ap));
-      // Verifica se o texto do lançamento contém algum apelido salvo
-      autoConfirmado = apelidosAluno.some(ap => ap.length > 4 && nNorm.includes(ap));
+      // Exige que o apelido tenha pelo menos 8 chars E que o match seja quase exato (>80% das palavras)
+      autoConfirmado = apelidosAluno.some(ap => {
+        if(ap.length < 8) return false;
+        const wordsAp = ap.split(' ').filter(w=>w.length>3);
+        const wordsNorm = nNorm.split(' ').filter(w=>w.length>3);
+        if(!wordsAp.length || !wordsNorm.length) return false;
+        const matches = wordsAp.filter(w=>wordsNorm.some(wn=>wn===w||wn.includes(w)&&w.length>5));
+        return matches.length / wordsAp.length >= 0.8; // 80% das palavras do apelido devem bater
+      });
     }
 
-    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, scoreMatch:scoreMax});
+    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, manualConfirmado:false, scoreMatch:scoreMax});
   });
 
   const conf = extratoLinhas.filter(l=>l.confirmado).length;
@@ -4198,7 +4205,7 @@ function renderMatchLista(){
     const apelidos=(a.apelidos||[]).filter(Boolean);
     return`<div class="fin-row" style="cursor:pointer;border-radius:8px;transition:.12s;padding:8px 4px"
         onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"
-        onclick="confirmarMatch(${a.id})">
+        onclick="confirmarMatch(${a.id})" title="Clique para identificar e dar baixa em ${cob?mesNome(cob.mes)+' '+fmtR(cob.valor):'(sem cobrança pendente)'}">
       ${fotoEl(a,'avatar')}
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:700">${a.nome}</div>
@@ -4212,7 +4219,11 @@ function renderMatchLista(){
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-        ${cob?`<span class="badge b-red">${fmtR(cob.valor)}</span>`:a.ativo?'<span class="badge b-green">Em dia</span>':'<span class="badge b-gray">Inativo</span>'}
+        ${cob
+          ?`<span class="badge b-red">${mesNome(cob.mes)} · ${fmtR(cob.valor)}</span>`
+          :a.ativo
+            ?'<span class="badge b-green">✅ Em dia</span>'
+            :'<span class="badge b-gray">Inativo</span>'}
         <button class="btn btn-xs" style="font-size:10px;white-space:nowrap" onclick="event.stopPropagation();abrirGerenciarApelidos(${a.id})">📛 apelidos</button>
       </div>
     </div>`;
@@ -4329,6 +4340,7 @@ async function confirmarSplit(){
   const l=extratoLinhas[matchLancamento]; if(!l)return;
   l.splitAlunos=[...splitSelecionados];
   l.confirmado=true;
+  l.manualConfirmado=true;
   l.scoreMatch=1;
   if(splitSelecionados[0]?.cobId){
     l.cobranca=cobrancas.find(c=>c.id===splitSelecionados[0].cobId)||null;
@@ -4374,12 +4386,12 @@ async function confirmarSplit(){
 function confirmarMatch(alunoId){
   const l=extratoLinhas[matchLancamento]; if(!l)return;
   const a=alunos.find(x=>x.id===alunoId); if(!a)return;
-  l.alunoMatch=a; l.confirmado=true; l.scoreMatch=1; l.splitAlunos=null;
+  l.alunoMatch=a; l.confirmado=true; l.manualConfirmado=true; l.scoreMatch=1; l.splitAlunos=null;
   const mesAtual=document.getElementById('filtro-mes').value;
   l.cobranca=cobrancas.find(c=>c.alunoId===a.id&&c.mes===mesAtual&&!c.pago&&!c.cancelado)||null;
 
-  // Adiciona nome do extrato como apelido automaticamente (para auto-confirmar na próxima vez)
-  const nNorm=normalize(l.nomeRaw||'');
+  // Salva apelido para auto-confirmar na próxima vez
+  const nNorm=normalize(l.nomeRaw||'')
   if(nNorm&&nNorm.length>4&&!(a.apelidos||[]).map(ap=>normalize(ap)).includes(nNorm)){
     if(!a.apelidos)a.apelidos=[];
     a.apelidos.push(nNorm);
@@ -4389,19 +4401,19 @@ function confirmarMatch(alunoId){
   closeModal('modal-match');
   renderExtratoLinhas();
 
-  // Dá baixa imediata na cobrança ao confirmar identificação
+  // Aplica baixa com toast informativo mostrando o que foi dado baixa
   if(l.cobranca && !l.cobranca.pago){
     l.cobranca.pago=true;
-    // Usa a data do lançamento do extrato se disponível, senão hoje
     l.cobranca.dataPag = l.data ? converterDataBR(l.data) : today();
-    l.cobranca.origemExtrato = true; // marcado via extrato bancário
+    l.cobranca.origemExtrato = true;
     sbSalvarCobranca(l.cobranca).then(()=>{
       salvarCacheLocal();
       renderCobrancas();
-      showToast(`✅ ${a.nome.split(' ')[0]} — identificado e baixa aplicada!`);
+      renderAtraso();
     });
+    showToast(`✅ ${a.nome.split(' ')[0]} · ${mesNome(mesAtual)} · ${fmtR(l.cobranca.valor)} · ${l.data||'hoje'}`);
   } else {
-    showToast(`✅ Vinculado a ${a.nome.split(' ')[0]}! (sem cobrança pendente neste mês)`);
+    showToast(`✅ Vinculado a ${a.nome.split(' ')[0]}! (sem cobrança pendente)`);
   }
 }
 
@@ -4409,7 +4421,8 @@ async function aplicarBaixas(){
   let count=0;
   const cobParaSalvar=[];
   // Aplica baixa em todos os lançamentos CONFIRMADOS com cobrança não paga
-  extratoLinhas.filter(l=>l.confirmado).forEach(l=>{
+  // Aplica APENAS em itens confirmados manualmente pelo usuário
+  extratoLinhas.filter(l=>l.confirmado && l.manualConfirmado).forEach(l=>{
     const dataPag = l.data ? converterDataBR(l.data) : today();
     if(l.splitAlunos&&l.splitAlunos.length){
       l.splitAlunos.forEach(s=>{
