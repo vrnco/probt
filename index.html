@@ -668,7 +668,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
                 <option value="todos">Todos</option>
               </select>
             </div>
-          <button class="btn btn-success btn-sm" onclick="aplicarBaixas()">✅ Aplicar baixas</button>
+          <button class="btn btn-success btn-sm" onclick="aplicarBaixas()" title="Aplica baixa em todos os lançamentos já identificados">✅ Aplicar baixas pendentes</button>
         </div>
       </div>
       <div class="card" style="padding:10px 14px"><div id="extrato-linhas"></div></div>
@@ -4139,10 +4139,7 @@ function renderExtratoLinhas(){
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         ${status}
-        ${!isSplit&&cob&&!cob.pago&&l.confirmado
-          ?`<input type="checkbox" id="extc-${l.id}" checked title="Dar baixa">`
-          :isSplit?`<input type="checkbox" id="extc-${l.id}" checked title="Dar baixa em todos">`
-          :cob&&cob.pago?`<span class="badge b-green" style="font-size:10px">Pago</span>`:''}
+        ${cob&&cob.pago&&!l.manualConfirmado?`<span class="badge b-green" style="font-size:10px">Pago</span>`:''}
         <button class="btn btn-xs" onclick="abrirMatch(${l.id})">Identificar</button>
       </div>
     </div>`;
