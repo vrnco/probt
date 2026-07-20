@@ -3622,6 +3622,10 @@ async function confirmarPagamento(){
       }
     }
     cobParaSalvar.push(cob);
+    // MARCA como pago AQUI — antes de salvar
+    cob.pago = true;
+    cob.dataPag = data;
+    cob.pgto = cpagPgto;
   }
 
   closeModal('modal-confirmar-pag');
