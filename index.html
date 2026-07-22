@@ -4059,7 +4059,14 @@ function processarLinhasExtrato(linhasRaw){
       });
     }
 
-    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, manualConfirmado:false, scoreMatch:scoreMax});
+    // Se auto-confirmado por apelido e tem cobrança pendente, dá baixa imediata
+    if(autoConfirmado && cobranca && !cobranca.pago && !cobranca.cancelado){
+      cobranca.pago=true;
+      cobranca.dataPag=data?converterDataBR(data):today();
+      cobranca.origemExtrato=true;
+      sbSalvarCobranca(cobranca).then(()=>salvarCacheLocal());
+    }
+    extratoLinhas.push({id:i, texto:l.linhaOriginal||nomeRaw, nomeRaw, valor, data, alunoMatch, cobranca, confirmado:autoConfirmado, manualConfirmado:autoConfirmado, scoreMatch:scoreMax});
   });
 
   const conf = extratoLinhas.filter(l=>l.confirmado && l.manualConfirmado).length;
@@ -4102,7 +4109,7 @@ function renderExtratoLinhas(){
   // Pendentes = ainda não confirmados pelo usuário (inclui sugestões automáticas)
   if(filtro==='pendentes')     lista = lista.filter(l=>{
     if(l.valor !== null && l.valor !== undefined && l.valor <= 0) return false;
-    return !l.manualConfirmado; // pendente = ainda não confirmado manualmente
+    return !l.confirmado && !l.manualConfirmado; // pendente = não confirmado (nem auto nem manual)
   });
 
   c.innerHTML=lista.map(l=>{
@@ -7021,7 +7028,7 @@ function importarBackup(){ showToast('Para restaurar um backup, use o painel do 
 
 // ===================== PWA =====================
 // VERSÃO — altere este número a cada novo deploy para forçar atualização no celular
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 
 function registrarPWA(){
   const manifest = {
