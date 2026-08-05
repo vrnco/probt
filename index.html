@@ -465,15 +465,21 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
     <button class="inner-tab" onclick="switchTab('presenca','avisos',this)">🔔 Avisos de falta</button>
   </div>
   <div id="pt-registrar">
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <!-- Filtros: data e turma -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="fillSelPresenca(false);renderPresCards()">
       <select id="pres-turma" onchange="renderPresCards()" style="flex:2;min-width:160px"></select>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--muted)">
-      <span>🟢 Presente</span><span>🔴 Faltou</span><span>🟡 Faltou (avisou) +1</span><span>🟣 Reposição −1</span><span>⚡ Antecipação</span><span>🔔 Aviso de falta</span>
+    <!-- Ações rápidas -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn btn-success btn-sm" onclick="presencaTodos()" style="flex:1">✅ Presença para todos</button>
+      <button class="btn btn-sm" onclick="faltaTodos()" style="flex:1;color:var(--red);border-color:var(--red)">❌ Falta para todos</button>
     </div>
-    <div class="p-grid" id="pres-cards"></div>
-    <div style="margin-top:12px;text-align:right"><button class="btn btn-primary btn-sm" onclick="salvarPresenca()">Salvar presença</button></div>
+    <!-- Lista de alunos -->
+    <div id="pres-cards"></div>
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn btn-primary btn-sm" onclick="salvarPresenca()">💾 Salvar presença</button>
+    </div>
   </div>
   <div id="pt-historico" style="display:none">
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -2160,7 +2166,19 @@ function renderPresCards(){
   const t=turmas.find(x=>x.id===tid);
   const c=document.getElementById('pres-cards');
   if(!t){c.innerHTML='<div class="empty">Selecione uma turma</div>';return;}
-  const alunosTurma=alunos.filter(a=>a.turmas&&a.turmas.includes(tid)&&a.ativo);
+
+  const alunosTurma=alunos.filter(a=>a.turmas&&a.turmas.includes(tid)&&a.ativo)
+    .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+  // Alunos de reposição nesta turma/data
+  const alunosRep=[];
+  if(data){
+    alunos.filter(a=>a.ativo&&!(a.turmas&&a.turmas.includes(tid))).forEach(a=>{
+      const reps=(a.reposicoes?.lista||[]).filter(r=>r.turmaId===tid&&r.data===data&&!r.usada);
+      if(reps.length) alunosRep.push(a);
+    });
+  }
+
   const key=tid+'_'+data;
   if(!presTemp[key])presTemp[key]={};
   const reg=presTemp[key];
@@ -2168,19 +2186,89 @@ function renderPresCards(){
     const p=presencas.find(x=>x.turmaId===tid&&x.data===data);
     if(p)p.registros.forEach(r=>{reg[r.alunoId]={status:r.status,obs:r.obs||'',turmaRep:r.turmaRep||null};});
   }
-  if(!alunosTurma.length){c.innerHTML='<div class="empty">Nenhum aluno ativo nesta turma</div>';return;}
-  c.innerHTML=alunosTurma.map(a=>{
+
+  if(!alunosTurma.length&&!alunosRep.length){
+    c.innerHTML='<div class="empty">Nenhum aluno ativo nesta turma</div>';return;
+  }
+
+  const renderLinha=(a,isRep=false)=>{
     const r=reg[a.id]||{};
+    const status=r.status||'';
     const saldo=a.reposicoes?a.reposicoes.saldo:0;
-    return`<div class="p-card ${r.status||''}" onclick="openPresAluno(${a.id},'${key}')">
-      ${fotoEl(a,'p-foto')}
-      <div class="p-nome">${a.nome.split(' ')[0]}</div>
-      <div class="p-status">${statusLabel(r.status)||'Registrar'}</div>
-      ${saldo>0?`<div class="p-rep">+${saldo} rep.</div>`:''}
-      ${r.obs?`<div style="font-size:9px;color:var(--muted);margin-top:1px;font-style:italic">${r.obs.slice(0,24)}${r.obs.length>24?'…':''}</div>`:''}
+    const bg=status==='presente'?'#f0fdf4':status==='faltou'?'#fff1f1':status==='faltou_rep'?'#fffbeb':status==='reposicao'?'#f5f3ff':'';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px solid var(--border);border-radius:8px;background:${bg};margin-bottom:3px">
+      <div onclick="abrirPopupAluno(${a.id},event)" style="cursor:pointer;flex-shrink:0">${fotoEl(a,'avatar')}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;cursor:pointer" onclick="abrirPopupAluno(${a.id},event)">${a.nome}</div>
+        <div style="font-size:10px;color:var(--muted)">${isRep?'<span style="color:#7c3aed;font-weight:600">↩ Reposição</span> · ':''}${statusLabel(status)||'Sem registro'}</div>
+        ${r.obs?`<div style="font-size:10px;color:var(--muted);font-style:italic">${r.obs}</div>`:''}
+        ${saldo>0&&!isRep?`<span style="font-size:10px;color:var(--accent)">+${saldo} rep disponível</span>`:''}
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-xs" onclick="setPresStatus(${a.id},'${key}','presente')"
+          style="${status==='presente'?'background:var(--green);color:#fff;border-color:var(--green)':'opacity:.45'}">✅</button>
+        <button class="btn btn-xs" onclick="setPresStatus(${a.id},'${key}','faltou')"
+          style="${status==='faltou'?'background:var(--red);color:#fff;border-color:var(--red)':'opacity:.45'}">❌</button>
+        <button class="btn btn-xs" onclick="setPresStatus(${a.id},'${key}','faltou_rep')"
+          style="${status==='faltou_rep'?'background:var(--amber);color:#fff;border-color:var(--amber)':'opacity:.45'}" title="Faltou + aviso +1 rep">🟡</button>
+        ${isRep||saldo>0?`<button class="btn btn-xs" onclick="setPresStatus(${a.id},'${key}','reposicao')"
+          style="${status==='reposicao'?'background:#7c3aed;color:#fff;border-color:#7c3aed':'opacity:.45'}" title="Reposição −1">🟣</button>`:''}
+        <button class="btn btn-xs" onclick="openPresAluno(${a.id},'${key}')" style="opacity:.5" title="Observação / mais opções">···</button>
+      </div>
     </div>`;
-  }).join('');
+  };
+
+  let html='';
+  if(alunosTurma.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:4px 0 8px">${t.nome} · ${alunosTurma.length} aluno${alunosTurma.length!==1?'s':''}</div>`;
+    html+=alunosTurma.map(a=>renderLinha(a,false)).join('');
+  }
+  if(alunosRep.length){
+    html+=`<div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;padding:10px 0 8px">↩ Reposições (${alunosRep.length})</div>`;
+    html+=alunosRep.map(a=>renderLinha(a,true)).join('');
+  }
+  c.innerHTML=html;
 }
+
+function setPresStatus(alunoId,key,status){
+  if(!presTemp[key])presTemp[key]={};
+  if(presTemp[key][alunoId]?.status===status){
+    presTemp[key][alunoId]={};
+  } else {
+    if(!presTemp[key][alunoId])presTemp[key][alunoId]={};
+    presTemp[key][alunoId].status=status;
+  }
+  renderPresCards();
+}
+
+function presencaTodos(){
+  const tid=parseInt(document.getElementById('pres-turma').value);
+  const data=document.getElementById('pres-data').value;
+  if(!tid||!data){showToast('Selecione turma e data','amber');return;}
+  const key=tid+'_'+data;
+  if(!presTemp[key])presTemp[key]={};
+  alunos.filter(a=>a.turmas&&a.turmas.includes(tid)&&a.ativo).forEach(a=>{
+    if(!presTemp[key][a.id])presTemp[key][a.id]={};
+    presTemp[key][a.id].status='presente';
+  });
+  renderPresCards();
+  showToast('✅ Todos marcados como presentes');
+}
+
+function faltaTodos(){
+  const tid=parseInt(document.getElementById('pres-turma').value);
+  const data=document.getElementById('pres-data').value;
+  if(!tid||!data){showToast('Selecione turma e data','amber');return;}
+  const key=tid+'_'+data;
+  if(!presTemp[key])presTemp[key]={};
+  alunos.filter(a=>a.turmas&&a.turmas.includes(tid)&&a.ativo).forEach(a=>{
+    if(!presTemp[key][a.id])presTemp[key][a.id]={};
+    presTemp[key][a.id].status='faltou';
+  });
+  renderPresCards();
+  showToast('❌ Todos marcados como faltou');
+}
+
 
 function openPresAluno(alunoId, key){
   const a=alunos.find(x=>x.id===alunoId); if(!a)return;
@@ -7028,7 +7116,7 @@ function importarBackup(){ showToast('Para restaurar um backup, use o painel do 
 
 // ===================== PWA =====================
 // VERSÃO — altere este número a cada novo deploy para forçar atualização no celular
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 
 function registrarPWA(){
   const manifest = {
