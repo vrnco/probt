@@ -1911,7 +1911,14 @@ function renderWeekGrid(){
         const avisosD=avisosFalta.filter(av=>av.turmaId===t.id&&av.data===iso);
         const presD=presencas.find(p=>p.turmaId===t.id&&p.data===iso);
         const antecip=presD?presD.registros.filter(r=>r.status==='antecipacao').length:0;
-        const vagasReais = (t.vagas - at.length) + avisosD.length + antecip;
+        // Contar reposições registradas para este dia
+        const repsNoDia = alunos.reduce((acc,a)=>{
+          if(t.alunos.includes(a.id)) return acc; // aluno fixo não conta
+          const rep=(a.reposicoes?.lista||[]).find(r=>r.turmaId===t.id&&r.data===iso&&!r.usada);
+          return rep ? acc+1 : acc;
+        },0);
+        const totalNaTurma = at.length + repsNoDia;
+        const vagasReais = (t.vagas - totalNaTurma) + avisosD.length + antecip;
         const semAlunos  = at.length === 0;
 
         // Quem está fazendo reposição neste slot neste dia
@@ -1945,7 +1952,7 @@ function renderWeekGrid(){
           onclick="abrirTurmaPanel(${t.id},'${iso}')">
           <strong style="font-size:12px">${t.hora}</strong>
           <span style="display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
-          <span style="font-size:10px">${at.length}/${t.vagas}</span>
+          <span style="font-size:10px">${totalNaTurma}/${t.vagas}${repsNoDia>0?` <span style="color:#2e7d32;font-size:9px">(+${repsNoDia}↩)</span>`:''}</span>
           ${vagasBadge}${repBadge}
         </button>`;
       }).join('')}
@@ -3286,16 +3293,51 @@ function renderTurmaReposicao(){
   reps.sort((a,b)=>b.data.localeCompare(a.data));
   document.getElementById('tp-rep-lista').innerHTML=reps.length
     ?`<div style="font-size:12px;font-weight:700;color:var(--muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px">Reposições registradas</div>`+
-      reps.map(r=>`<div class="tp-rep-row">
+      reps.map(r=>`<div class="tp-rep-row" style="display:flex;align-items:center;gap:8px">
         ${fotoEl(r.aluno,'avatar')}
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600">${r.aluno.nome}</div>
           <div style="font-size:11px;color:var(--muted)">${fmtD(r.data)}${r.obs?' · '+r.obs:''}</div>
         </div>
+        <button class="btn btn-xs" style="color:var(--red);border-color:var(--red);flex-shrink:0"
+          onclick="cancelarReposicaoTurma(${r.aluno.id},'${r.data}')"
+          title="Cancelar esta reposição — devolve o crédito ao aluno">↩ Cancelar</button>
       </div>`).join('')
     :'<div style="font-size:13px;color:var(--muted);margin-top:12px">Nenhuma reposição registrada nesta turma</div>';
 }
 
+as
+
+async function cancelarReposicaoTurma(alunoId, data){
+  const a = alunos.find(x=>x.id===alunoId); if(!a) return;
+  const t = turmas.find(x=>x.id===turmaPanelId); if(!t) return;
+  if(!confirm(`Cancelar a reposição de ${a.nome.split(' ')[0]} em ${t.nome} (${fmtD(data)})?\n\nO crédito será devolvido ao aluno.`)) return;
+
+  // Devolve o saldo de reposição
+  if(a.reposicoes){
+    a.reposicoes.saldo = (a.reposicoes.saldo||0) + 1;
+    a.reposicoes.log = a.reposicoes.log||[];
+    a.reposicoes.log.push({tipo:'devolvido', data:today(), obs:`Reposição cancelada em ${t.nome} (${data})`});
+    // Remove da lista de reposições do aluno
+    if(a.reposicoes.lista){
+      a.reposicoes.lista = a.reposicoes.lista.filter(r=>!(r.turmaId===turmaPanelId&&r.data===data));
+    }
+  }
+
+  // Remove da presença registrada
+  const presD = presencas.find(p=>p.turmaId===turmaPanelId&&p.data===data);
+  if(presD){
+    presD.registros = presD.registros.filter(r=>!(r.alunoId===alunoId&&r.status==='reposicao'));
+    await sbSalvarPresenca(presD);
+  }
+
+  // Salva aluno atualizado
+  await sbSalvarAluno(a);
+  salvarCacheLocal();
+  renderTurmaPanel();
+  renderWeekGrid();
+  showToast(`↩ Reposição cancelada — crédito devolvido a ${a.nome.split(' ')[0]}`);
+}
 async function registrarReposicaoNaTurma(){
   const alunoId=parseInt(document.getElementById('tp-rep-aluno').value);
   const data=document.getElementById('tp-rep-data').value;
@@ -7116,7 +7158,7 @@ function importarBackup(){ showToast('Para restaurar um backup, use o painel do 
 
 // ===================== PWA =====================
 // VERSÃO — altere este número a cada novo deploy para forçar atualização no celular
-const APP_VERSION = '2.1.1';
+const APP_VERSION = '2.1.2';
 
 function registrarPWA(){
   const manifest = {
