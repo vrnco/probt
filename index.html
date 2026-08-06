@@ -1911,18 +1911,17 @@ function renderWeekGrid(){
         const avisosD=avisosFalta.filter(av=>av.turmaId===t.id&&av.data===iso);
         const presD=presencas.find(p=>p.turmaId===t.id&&p.data===iso);
         const antecip=presD?presD.registros.filter(r=>r.status==='antecipacao').length:0;
-        // Contar reposições registradas para este dia
-        const repsNoDia = alunos.reduce((acc,a)=>{
-          if(t.alunos.includes(a.id)) return acc; // aluno fixo não conta
-          const rep=(a.reposicoes?.lista||[]).find(r=>r.turmaId===t.id&&r.data===iso&&!r.usada);
-          return rep ? acc+1 : acc;
-        },0);
+        // Contar reposições neste dia usando presencas (fonte correta)
+        const repsNoDia = presD
+          ? presD.registros.filter(r=>r.status==='reposicao'&&!at.find(a=>a.id===r.alunoId)).length
+          : 0;
         const totalNaTurma = at.length + repsNoDia;
         const vagasReais = (t.vagas - totalNaTurma) + avisosD.length + antecip;
         const semAlunos  = at.length === 0;
 
-        // Quem está fazendo reposição neste slot neste dia
-        const repNames = presD
+        // Quem fez/vai fazer reposição neste dia (só mostra se for hoje ou futuro)
+        const today2 = new Date().toISOString().slice(0,10);
+        const repNames = presD && iso >= today2
           ? presD.registros
               .filter(r=>r.status==='reposicao')
               .map(r=>{ const a=alunos.find(x=>x.id===r.alunoId); return a?a.nome.split(' ')[0]:null; })
