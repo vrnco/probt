@@ -1951,7 +1951,7 @@ function renderWeekGrid(){
           onclick="abrirTurmaPanel(${t.id},'${iso}')">
           <strong style="font-size:12px">${t.hora}</strong>
           <span style="display:block;font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.nome}</span>
-          <span style="font-size:10px">${totalNaTurma}/${t.vagas}${repsNoDia>0?` <span style="color:#2e7d32;font-size:9px">(+${repsNoDia}↩)</span>`:''}</span>
+          <span style="font-size:10px">${totalNaTurma}/${t.vagas}${repsNoDia>0?'<span style="color:#2e7d32;font-size:9px"> (+'+repsNoDia+'↩)</span>':''}</span>
           ${vagasBadge}${repBadge}
         </button>`;
       }).join('')}
