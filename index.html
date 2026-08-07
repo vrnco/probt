@@ -2310,15 +2310,6 @@ function openPresAluno(alunoId, key){
   openModal('modal-pres');
 }
 
-function setPresStatus(alunoId, key, status){
-  if(!presTemp[key])presTemp[key]={};
-  if(!presTemp[key][alunoId])presTemp[key][alunoId]={};
-  presTemp[key][alunoId].status=status;
-  const repSec=document.getElementById('rep-turma-section');
-  if(repSec)repSec.style.display=status==='reposicao'?'block':'none';
-  // Re-render do modal para atualizar explicações contextuais
-  openPresAluno(alunoId, key);
-}
 
 function confirmarPresAluno(alunoId, key){
   if(!presTemp[key])presTemp[key]={};
@@ -3305,7 +3296,6 @@ function renderTurmaReposicao(){
     :'<div style="font-size:13px;color:var(--muted);margin-top:12px">Nenhuma reposição registrada nesta turma</div>';
 }
 
-as
 
 async function cancelarReposicaoTurma(alunoId, data){
   const a = alunos.find(x=>x.id===alunoId); if(!a) return;
