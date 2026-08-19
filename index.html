@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1a6fbd">
+<meta name="theme-color" content="#c5e84a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Beach Tennis">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231a6fbd'/><text y='.9em' font-size='80' x='10'>🎾</text></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><!-- Ball body --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27%23c5e84a%27/><!-- White seam lines (classic tennis ball curves) --><path d=%27M 20 28 Q 50 50 20 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><path d=%27M 80 28 Q 50 50 80 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><!-- Subtle shadow --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27none%27 stroke=%27%23a8cc30%27 stroke-width=%272%27/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><!-- Ball body --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27%23c5e84a%27/><!-- White seam lines (classic tennis ball curves) --><path d=%27M 20 28 Q 50 50 20 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><path d=%27M 80 28 Q 50 50 80 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><!-- Subtle shadow --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27none%27 stroke=%27%23a8cc30%27 stroke-width=%272%27/></svg>">
 <link rel="manifest" id="pwa-manifest">
 <title>Beach Tennis Pro</title>
 <style>
@@ -469,6 +470,12 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="fillSelPresenca(false);renderPresCards()">
       <select id="pres-turma" onchange="renderPresCards()" style="flex:2;min-width:160px"></select>
+    </div>
+    <!-- Próxima turma -->
+    <div style="margin-bottom:10px">
+      <button class="btn btn-sm" onclick="irProximaTurma()" style="width:100%;background:var(--bg);border:1px solid var(--border);font-size:13px" id="btn-proxima-turma">
+        ⏭ Próxima turma
+      </button>
     </div>
     <!-- Ações rápidas -->
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -2197,6 +2204,23 @@ function renderPresCards(){
     c.innerHTML='<div class="empty">Nenhum aluno ativo nesta turma</div>';return;
   }
 
+  // Atualiza label do botão próxima turma
+  const dataAtual = document.getElementById('pres-data')?.value || today();
+  const dowAtual = DIAS_SEMANA[new Date(dataAtual+'T12:00').getDay()];
+  const turmasDia = turmas.filter(x=>x.dias&&x.dias.includes(dowAtual)).sort((a,b)=>a.hora.localeCompare(b.hora));
+  const idxAtual = turmasDia.findIndex(x=>x.id===tid);
+  const proxT = idxAtual >= 0 && idxAtual < turmasDia.length-1 ? turmasDia[idxAtual+1] : null;
+  const btn = document.getElementById('btn-proxima-turma');
+  if(btn){
+    if(proxT){
+      btn.textContent = `⏭ Próxima: ${proxT.hora} ${proxT.nome}`;
+      btn.style.color = 'var(--accent)';
+    } else {
+      btn.textContent = '⏭ Próxima turma (outro dia)';
+      btn.style.color = '';
+    }
+  }
+
   const renderLinha=(a,isRep=false)=>{
     const r=reg[a.id]||{};
     const status=r.status||'';
@@ -2245,6 +2269,65 @@ function setPresStatus(alunoId,key,status){
     presTemp[key][alunoId].status=status;
   }
   renderPresCards();
+}
+
+fu
+function irProximaTurma(){
+  const dataEl = document.getElementById('pres-data');
+  const turmaEl = document.getElementById('pres-turma');
+  if(!dataEl || !turmaEl) return;
+
+  const dataAtual = dataEl.value || today();
+  const turmaAtualId = parseInt(turmaEl.value);
+
+  // Turmas do dia atual ordenadas por hora
+  const dowAtual = DIAS_SEMANA[new Date(dataAtual+'T12:00').getDay()];
+  const turmasDia = turmas
+    .filter(t => t.dias && t.dias.includes(dowAtual))
+    .sort((a,b) => a.hora.localeCompare(b.hora));
+
+  // Procura próxima turma no mesmo dia
+  const idxAtual = turmasDia.findIndex(t => t.id === turmaAtualId);
+  if(idxAtual >= 0 && idxAtual < turmasDia.length - 1){
+    // Tem próxima no mesmo dia
+    turmaEl.value = turmasDia[idxAtual + 1].id;
+    renderPresCards();
+    const proxT = turmasDia[idxAtual + 1];
+    atualizarBtnProxima(proxT, dataAtual);
+    return;
+  }
+
+  // Avança para o próximo dia que tem turmas (até 7 dias)
+  for(let d=1; d<=7; d++){
+    const proxData = new Date(dataAtual+'T12:00');
+    proxData.setDate(proxData.getDate() + d);
+    const proxDataStr = proxData.toISOString().slice(0,10);
+    const dowProx = DIAS_SEMANA[proxData.getDay()];
+    const turmasProxDia = turmas
+      .filter(t => t.dias && t.dias.includes(dowProx))
+      .sort((a,b) => a.hora.localeCompare(b.hora));
+
+    if(turmasProxDia.length > 0){
+      dataEl.value = proxDataStr;
+      fillSelPresenca(false);
+      // Seleciona primeira turma do dia
+      setTimeout(()=>{
+        if(turmasProxDia[0]) turmaEl.value = turmasProxDia[0].id;
+        renderPresCards();
+        atualizarBtnProxima(turmasProxDia[0], proxDataStr);
+      }, 50);
+      return;
+    }
+  }
+  showToast('Nenhuma turma encontrada nos próximos 7 dias', 'amber');
+}
+
+function atualizarBtnProxima(turma, data){
+  const btn = document.getElementById('btn-proxima-turma');
+  if(!btn || !turma) return;
+  const dow = DIAS_SEMANA[new Date(data+'T12:00').getDay()];
+  const diaLabel = {seg:'Seg',ter:'Ter',qua:'Qua',qui:'Qui',sex:'Sex',sab:'Sáb',dom:'Dom'}[dow]||dow;
+  btn.textContent = `⏭ Próxima: ${turma.hora} ${turma.nome} (${diaLabel})`;
 }
 
 function presencaTodos(){
@@ -5948,16 +6031,22 @@ function renderGraficosAlunos(){
 function buildChartAlunosMes(ano){
   destroyChart('ames');
   const ativosporMes=MESES_LABEL.map((_,mi)=>{
-    const mesData=new Date(ano,mi+1,0);
+    const mesData=new Date(ano,mi+1,0); // último dia do mês
+    const mesInicio=new Date(ano,mi,1);
     return alunos.filter(a=>{
-      if(!a.inicio)return false;
-      const ini=new Date(a.inicio); if(ini>mesData)return false;
-      const parou=(a.historico||[]).filter(h=>h.tipo==='parou').sort((a,b)=>b.data.localeCompare(a.data))[0];
-      const ret=(a.historico||[]).filter(h=>h.tipo==='retornou').sort((a,b)=>b.data.localeCompare(a.data))[0];
-      if(!parou)return true;
-      if(new Date(parou.data)>mesData)return true;
-      if(ret&&new Date(ret.data)<=mesData&&new Date(ret.data)>new Date(parou.data))return true;
-      return false;
+      // Data de início: usa inicio > createdAt > ignora se nenhum
+      const inicioStr = a.inicio || a.createdAt?.slice(0,10) || '';
+      if(!inicioStr) return a.ativo; // sem data: conta se ativo agora
+      const ini=new Date(inicioStr);
+      if(ini>mesData) return false; // ainda não tinha começado
+      // Verificar se parou antes do fim do mês
+      const parou=(a.historico||[]).filter(h=>h.tipo==='parou'&&new Date(h.data)<=mesData)
+        .sort((a,b)=>b.data.localeCompare(a.data))[0];
+      if(!parou) return true;
+      // Verificar se retornou depois de parar
+      const ret=(a.historico||[]).filter(h=>h.tipo==='retornou'&&new Date(h.data)<=mesData&&new Date(h.data)>new Date(parou.data))
+        .sort((a,b)=>b.data.localeCompare(a.data))[0];
+      return !!ret;
     }).length;
   });
   const ctx=document.getElementById('chart-alunos-mes'); if(!ctx)return;
@@ -5980,8 +6069,15 @@ function buildChartFluxo(ano){
   const entradas=[],saidas=[];
   for(let m=0;m<12;m++){
     const ms=`${ano}-${String(m+1).padStart(2,'0')}`;
-    entradas.push(alunos.filter(a=>a.inicio&&a.inicio.startsWith(ms)).length);
-    saidas.push(alunos.filter(a=>(a.historico||[]).some(h=>h.tipo==='parou'&&h.data.startsWith(ms))).length);
+    // Entradas: usa inicio ou createdAt
+    entradas.push(alunos.filter(a=>{
+      const d = a.inicio || a.createdAt?.slice(0,7) || '';
+      return d.startsWith(ms);
+    }).length);
+    // Saídas: historico tipo 'parou' ou alunos inativados nesse mês
+    saidas.push(alunos.filter(a=>{
+      return (a.historico||[]).some(h=>h.tipo==='parou'&&h.data.startsWith(ms));
+    }).length);
   }
   const ctx=document.getElementById('chart-fluxo'); if(!ctx)return;
   chartInstances['fluxo']=new Chart(ctx,{
@@ -6524,7 +6620,7 @@ async function carregarConfigsDoSupabase(){
 async function buscarDoSupabase(){
   const [t, a, p, c, av, co] = await Promise.all([
     sbGet('turmas',   'order=hora'),
-    sbGet('alunos',   'order=nome'),
+    sbGet('alunos',   'order=nome&select=*,created_at'),
     sbGet('presencas','order=data.desc&limit=500'),
     sbGet('cobrancas','order=mes.desc'),
     sbGet('avisos_falta','order=data'),
@@ -6593,7 +6689,7 @@ window.addEventListener('offline', ()=>{
 
 // ===================== MAPEADORES =====================
 function mapTurma(r){ return { id:r.id, _sbId:r.id, hora:r.hora, dias:r.dias||[], nome:r.nome, vagas:r.vagas||6, nivel:r.nivel||r.categoria||'Misto', categoria:r.categoria||r.nivel||'Misto', cor:r.cor||'', mensalidade:parseFloat(r.mensalidade||0), alunos:r.alunos||[] }; }
-function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', patrocinado:r.patrocinado||false, patrocinador:r.patrocinador||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||180), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
+function mapAluno(r){ return { id:r.id, _sbId:r.id, nome:r.nome, nasc:r.nasc||'', tel:r.tel||'', turmas:r.turmas||[], inicio:r.inicio||'', createdAt:r.created_at||'', ativo:r.ativo!==false, foto:r.foto||'', respNome:r.resp_nome||'', respTel:r.resp_tel||'', respEmail:r.resp_email||'', respParentesco:r.resp_parentesco||'', patrocinado:r.patrocinado||false, patrocinador:r.patrocinador||'', obs:r.obs||'', aulasSemana:r.aulas_semana||1, camisa:r.camisa||'', catInicio:r.cat_inicio||'', catAtual:r.cat_atual||'', dataCatInicio:r.data_cat_inicio||'', diaVencimento:r.dia_vencimento||null, valor:parseFloat(r.valor||180), pgto:r.pgto||'pix', apelidos:r.apelidos||[], historico:r.historico||[], reposicoes:r.reposicoes||{saldo:0,log:[]}, avaliacao:r.avaliacao||{}, ultimaAvaliacao:r.ultima_avaliacao||'' }; }
 function mapPresenca(r){ return { id:r.id, _sbId:r.id, turmaId:r.turma_id, data:r.data, registros:r.registros||[] }; }
 function mapCobranca(r){ return { id:r.id, _sbId:r.id, alunoId:r.aluno_id, alunoNome:r.aluno_nome||'', mes:r.mes, valor:parseFloat(r.valor||0), pago:r.pago||false, dataPag:r.data_pag||null, pgto:r.pgto||'pix', turma:r.turma||'', msgEnviadaEm:r.msg_enviada_em||null, msgEnviadaVia:r.msg_enviada_via||null, cancelado:r.cancelado||false, obs:r.obs||null, origemExtrato:r.origem_extrato||false };  }
 function mapAviso(r){ return { id:r.id, alunoId:r.aluno_id, turmaId:r.turma_id, data:r.data, obs:r.obs||'', gerarCredito:r.gerar_credito!==false, registradoEm:r.registrado_em||'' }; }
@@ -7159,7 +7255,7 @@ function registrarPWA(){
     background_color:'#f4f4ef', theme_color:'#1a6fbd',
     orientation:'portrait-primary',
     icons:[
-      {src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%231a6fbd'/><text y='150' x='20' font-size='140'>🎾</text></svg>",sizes:'192x192',type:'image/svg+xml'},
+      {src:"data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><!-- Ball body --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27%23c5e84a%27/><!-- White seam lines (classic tennis ball curves) --><path d=%27M 20 28 Q 50 50 20 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><path d=%27M 80 28 Q 50 50 80 72%27 stroke=%27white%27 stroke-width=%277%27 fill=%27none%27 stroke-linecap=%27round%27/><!-- Subtle shadow --><circle cx=%2750%27 cy=%2750%27 r=%2748%27 fill=%27none%27 stroke=%27%23a8cc30%27 stroke-width=%272%27/></svg>",sizes:'192x192',type:'image/svg+xml'},
       {src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%231a6fbd'/><text y='400' x='50' font-size='380'>🎾</text></svg>",sizes:'512x512',type:'image/svg+xml'}
     ]
   };
