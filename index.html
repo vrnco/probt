@@ -2271,7 +2271,6 @@ function setPresStatus(alunoId,key,status){
   renderPresCards();
 }
 
-fu
 function irProximaTurma(){
   const dataEl = document.getElementById('pres-data');
   const turmaEl = document.getElementById('pres-turma');
@@ -6620,7 +6619,7 @@ async function carregarConfigsDoSupabase(){
 async function buscarDoSupabase(){
   const [t, a, p, c, av, co] = await Promise.all([
     sbGet('turmas',   'order=hora'),
-    sbGet('alunos',   'order=nome&select=*,created_at'),
+    sbGet('alunos',   'order=nome'),
     sbGet('presencas','order=data.desc&limit=500'),
     sbGet('cobrancas','order=mes.desc'),
     sbGet('avisos_falta','order=data'),
