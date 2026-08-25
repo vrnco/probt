@@ -7403,15 +7403,18 @@ function abrirPopupAluno(alunoId, evt){
   if(turmasAluno.length === 0){
     turmaEl.textContent = 'Sem turma';
   } else if(turmasAluno.length === 1){
-    turmaEl.textContent = turmasAluno[0].hora + ' · ' + turmasAluno[0].nome;
+    const t = turmasAluno[0];
+    const dias = (t.dias||[]).map(d=>({seg:'Seg',ter:'Ter',qua:'Qua',qui:'Qui',sex:'Sex',sab:'Sáb',dom:'Dom'}[d]||d)).join('/');
+    turmaEl.textContent = dias + ' ' + t.hora + ' · ' + t.nome;
   } else {
     // Múltiplas turmas — chips clicáveis
-    turmaEl.innerHTML = turmasAluno.map(t=>
-      `<span onclick="fecharPopupAluno();abrirTurmaPanel(${t.id},null)"
+    turmaEl.innerHTML = turmasAluno.map(t=>{
+      const dias = (t.dias||[]).map(d=>({seg:'Seg',ter:'Ter',qua:'Qua',qui:'Qui',sex:'Sex',sab:'Sáb',dom:'Dom'}[d]||d)).join('/');
+      return `<span onclick="fecharPopupAluno();abrirTurmaPanel(${t.id},null)"
         style="display:inline-block;background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;margin:2px 2px 2px 0;white-space:nowrap">
-        ${t.hora} ${t.nome.split(' ').slice(-1)[0]}
-      </span>`
-    ).join('');
+        ${dias} ${t.hora}
+      </span>`;
+    }).join('');
   }
 
   // Infos grid
