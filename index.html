@@ -1185,15 +1185,17 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
 <!-- Turma Manager Slide Panel -->
 <div class="det-plano-overlay" id="turma-panel-overlay" onclick="fecharTurmaPanel()"></div>
 <div class="det-plano-panel" id="turma-panel">
-  <div class="det-panel-head">
-    <div style="flex:1;min-width:0">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:2px" id="tp-meta"></div>
-      <div style="font-size:16px;font-weight:700" id="tp-titulo"></div>
+  <div class="det-panel-head" style="flex-direction:column;gap:8px;padding-top:max(16px,calc(env(safe-area-inset-top) + 8px))">
+    <div style="display:flex;align-items:flex-start;gap:8px;width:100%">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px" id="tp-meta"></div>
+        <div style="font-size:16px;font-weight:700" id="tp-titulo"></div>
+      </div>
+      <button class="modal-close" style="position:static;font-size:24px;flex-shrink:0" onclick="fecharTurmaPanel()">×</button>
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      <button class="btn btn-sm" onclick="editarTurmaAtual()">Editar turma</button>
-      <button class="btn btn-danger btn-sm" onclick="excluirTurmaAtual()">Excluir</button>
-      <button class="modal-close" style="position:static;font-size:24px" onclick="fecharTurmaPanel()">×</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" style="flex:1" onclick="editarTurmaAtual()">✏️ Editar turma</button>
+      <button class="btn btn-danger btn-sm" style="flex:1" onclick="excluirTurmaAtual()">🗑 Excluir</button>
     </div>
   </div>
   <div class="det-panel-body">
@@ -7395,12 +7397,22 @@ function abrirPopupAluno(alunoId, evt){
       : `<div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">${iniciais(a.nome)}</div>`;
   document.getElementById('popup-aluno-nome').textContent = a.nome;
 
-  // Turmas
-  const turmasStr = (a.turmas||[]).map(tid=>{
-    const t = turmas.find(x=>x.id===tid);
-    return t ? t.hora+' '+t.nome : '';
-  }).filter(Boolean).join(' · ') || 'Sem turma';
-  document.getElementById('popup-aluno-turma').textContent = turmasStr;
+  // Turmas — mostra todas com chips clicáveis
+  const turmasAluno = (a.turmas||[]).map(tid=>turmas.find(x=>x.id===tid)).filter(Boolean);
+  const turmaEl = document.getElementById('popup-aluno-turma');
+  if(turmasAluno.length === 0){
+    turmaEl.textContent = 'Sem turma';
+  } else if(turmasAluno.length === 1){
+    turmaEl.textContent = turmasAluno[0].hora + ' · ' + turmasAluno[0].nome;
+  } else {
+    // Múltiplas turmas — chips clicáveis
+    turmaEl.innerHTML = turmasAluno.map(t=>
+      `<span onclick="fecharPopupAluno();abrirTurmaPanel(${t.id},null)"
+        style="display:inline-block;background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:11px;cursor:pointer;margin:2px 2px 2px 0;white-space:nowrap">
+        ${t.hora} ${t.nome.split(' ').slice(-1)[0]}
+      </span>`
+    ).join('');
+  }
 
   // Infos grid
   const now = new Date();
@@ -7488,7 +7500,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') fecharPopupAluno(
     <div id="popup-aluno-foto" style="flex-shrink:0"></div>
     <div style="min-width:0">
       <div id="popup-aluno-nome" style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
-      <div id="popup-aluno-turma" style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px"></div>
+      <div id="popup-aluno-turma" style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;line-height:1.5"></div>
     </div>
     <button onclick="fecharPopupAluno()" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;margin-left:auto;padding:0;line-height:1">×</button>
   </div>
