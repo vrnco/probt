@@ -3638,7 +3638,20 @@ function renderDevedoresMesesAnteriores(alunosValidos){
     return;
   }
 
-  c.innerHTML = Object.entries(devedores)
+  // Botão de baixa em massa no topo
+  const totalGeral = Object.values(devedores).reduce((s,d)=>s+d.total,0);
+  const totalCobs  = Object.values(devedores).reduce((s,d)=>s+d.cobs.length,0);
+  c.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--card);border-radius:10px;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--red)">${qtdDev} devedor${qtdDev!==1?'es':''} · ${totalCobs} cobrança${totalCobs!==1?'s':''}</div>
+      <div style="font-size:12px;color:var(--muted)">Total em aberto: ${fmtR(totalGeral)}</div>
+    </div>
+    <button class="btn btn-green" style="font-size:13px;padding:8px 14px;white-space:nowrap" onclick="baixarTodosDevedoresAnteriores()">
+      💰 Dar baixa em todos
+    </button>
+  </div>`;
+
+  c.innerHTML += Object.entries(devedores)
     .sort((a,b) => { const diff = b[1].total - a[1].total; return diff !== 0 ? diff : (alunos.find(x=>x.id===parseInt(a[0]))?.nome||'').localeCompare(alunos.find(x=>x.id===parseInt(b[0]))?.nome||'','pt-BR'); }) // mais devedor primeiro, mesmo valor = alfabético
     .map(([alunoId, {cobs, total}]) => {
       const a = alunos.find(x=>x.id===parseInt(alunoId));
@@ -3659,6 +3672,34 @@ function renderDevedoresMesesAnteriores(alunosValidos){
         </div>
       </div>`;
     }).join('');
+}
+
+async function baixarTodosDevedoresAnteriores(){
+  const now = new Date();
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const cobsPendentes = cobrancas.filter(p => !p.pago && !p.cancelado && p.mes < mesAtual);
+  if(!cobsPendentes.length){ showToast('Nenhuma cobrança anterior em aberto!','amber'); return; }
+
+  const totalVal = cobsPendentes.reduce((s,c)=>s+c.valor,0);
+  const qtdAlunos = new Set(cobsPendentes.map(c=>c.alunoId)).size;
+
+  const ok = confirm(`💰 Dar baixa em TODAS as cobranças anteriores?\n\n${cobsPendentes.length} cobranças de ${qtdAlunos} aluno${qtdAlunos!==1?'s':''}\nTotal: ${fmtR(totalVal)}\n\nForma de pagamento: PIX\nData: hoje (${today()})\n\nConfirmar?`);
+  if(!ok) return;
+
+  const dataHoje = today();
+  let ok2 = 0, fail2 = 0;
+  for(const cob of cobsPendentes){
+    cob.pago = true;
+    cob.dataPag = dataHoje;
+    cob.pgto = 'pix';
+    try{ await sbSalvarCobranca(cob); ok2++; }
+    catch(e){ fail2++; }
+  }
+  salvarCacheLocal();
+  renderCobrancas();
+  renderAtraso();
+  if(fail2 > 0) showToast(`✅ ${ok2} baixas aplicadas, ⚠️ ${fail2} com erro.`, 'amber');
+  else showToast(`✅ ${ok2} cobranças baixadas com sucesso! ${fmtR(totalVal)}`);
 }
 
 let cpagId = null;
