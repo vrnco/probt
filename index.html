@@ -55,7 +55,7 @@
 
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
-/* NAV */
+/* ── NAV DESKTOP (topo) ──────────────────────────────────── */
 .nav{display:flex;background:var(--card);border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:50;
   padding-top:env(safe-area-inset-top);
   padding-left:env(safe-area-inset-left);
@@ -65,7 +65,51 @@ body{font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;backgrou
 .nav-btn{padding:14px 16px;font-size:13px;font-weight:600;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;letter-spacing:.01em}
 .nav-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:700}
 .nav-btn:hover:not(.active){background:var(--bg);color:var(--text)}
-/* LAYOUT */
+/* ── NAV MOBILE (tab bar inferior) ──────────────────────── */
+.tab-bar{display:none}
+@media(max-width:700px){
+  /* Esconde nav topo, mostra tab bar inferior */
+  .nav{display:none !important}
+  .tab-bar{
+    display:flex;
+    position:fixed;bottom:0;left:0;right:0;z-index:50;
+    background:var(--card);
+    border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom);
+    padding-left:env(safe-area-inset-left);
+    padding-right:env(safe-area-inset-right);
+    box-shadow:0 -2px 16px rgba(0,0,0,.1);
+  }
+  .tab-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:8px 2px 6px;
+    background:none;border:none;cursor:pointer;
+    color:var(--muted);font-size:9px;font-weight:600;letter-spacing:.03em;
+    text-transform:uppercase;transition:.15s;font-family:inherit;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tab-btn .tab-ico{font-size:22px;line-height:1;transition:.15s}
+  .tab-btn.active{color:var(--green)}
+  .tab-btn.active .tab-ico{transform:translateY(-2px)}
+  /* "Mais" button — abre menu extra */
+  .tab-more-menu{
+    display:none;position:fixed;bottom:calc(60px + env(safe-area-inset-bottom));
+    left:0;right:0;background:var(--card);border-top:1px solid var(--border);
+    border-radius:20px 20px 0 0;z-index:49;
+    box-shadow:0 -4px 24px rgba(0,0,0,.18);
+    padding:16px 12px 8px;
+  }
+  .tab-more-menu.open{display:block}
+  .tab-more-item{display:flex;align-items:center;gap:14px;padding:14px 12px;
+    border-radius:12px;cursor:pointer;font-size:15px;font-weight:600;color:var(--text);
+    border:none;background:none;width:100%;font-family:inherit;
+    -webkit-tap-highlight-color:transparent;transition:.12s}
+  .tab-more-item:hover,.tab-more-item:active{background:var(--bg)}
+  .tab-more-item .tm-ico{font-size:22px;width:36px;text-align:center}
+  .tab-more-overlay{display:none;position:fixed;inset:0;z-index:48;background:rgba(0,0,0,.3)}
+  .tab-more-overlay.open{display:block}
+}
+/* ── LAYOUT ──────────────────────────────────────────────── */
 .page{display:none;padding:16px;padding-top:calc(56px + 16px + env(safe-area-inset-top));max-width:960px;margin:0 auto;
   padding-bottom:calc(20px + env(safe-area-inset-bottom));
 }
@@ -404,20 +448,37 @@ textarea{resize:vertical;min-height:60px}
   .week-day-label{font-size:clamp(7px,1.6vw,9px);letter-spacing:0;margin-bottom:3px}
   .week-day-num{font-size:clamp(11px,2.5vw,15px);width:22px;height:22px;margin-bottom:3px}
   .week-slot-add{font-size:clamp(7px,1.5vw,9px);padding:2px}
+  /* Sem nav topo — padding-top usa só safe-area-inset-top + pequeno gap */
+  .page{
+    padding-top:calc(env(safe-area-inset-top) + 12px) !important;
+    /* Espaço embaixo para tab bar (~60px) + safe-area-bottom */
+    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+  }
+  #pg-dashboard{
+    padding-top:calc(env(safe-area-inset-top) + 12px) !important;
+    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+  }
+  /* Modal bottom sheet respeita tab bar */
+  .modal{
+    padding-bottom:calc(24px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - env(safe-area-inset-top) - 20px) !important;
+  }
 }
 @media(min-width:701px) and (max-width:1024px){
   .week-grid{grid-template-columns:repeat(6,1fr);gap:6px}
   .dash-grid{grid-template-columns:1fr 280px}
 }
 
-/* PWA Standalone mode fixes */
-.pwa-standalone .nav {
-  position: fixed !important;
-  top: 0; left: 0; right: 0;
-  padding-top: env(safe-area-inset-top);
-}
-.pwa-standalone .page {
-  padding-top: calc(56px + 16px + env(safe-area-inset-top)) !important;
+/* PWA Standalone mode fixes — mantém para desktop standalone */
+@media(min-width:701px){
+  .pwa-standalone .nav {
+    position: fixed !important;
+    top: 0; left: 0; right: 0;
+    padding-top: env(safe-area-inset-top);
+  }
+  .pwa-standalone .page {
+    padding-top: calc(56px + 16px + env(safe-area-inset-top)) !important;
+  }
 }
 </style>
 </head>
@@ -428,6 +489,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   document.documentElement.classList.add('pwa-standalone');
 }
 </script>
+<!-- ── NAV DESKTOP (topo) ─────────────────────────────── -->
 <div class="nav" style="justify-content:space-between;gap:0">
   <div style="display:flex;overflow-x:auto;flex:1">
     <button class="nav-btn active" onclick="goPage('dashboard',this)">🏠 Dashboard</button>
@@ -439,6 +501,40 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   </div>
   <button onclick="toggleTema()" id="btn-tema" title="Alternar tema claro/escuro"
     style="background:none;border:none;cursor:pointer;padding:10px 14px;font-size:18px;color:var(--muted);flex-shrink:0;border-left:1px solid var(--border)">🌙</button>
+</div>
+
+<!-- ── TAB BAR MOBILE (inferior) ─────────────────────── -->
+<div class="tab-bar" id="tab-bar">
+  <button class="tab-btn active" id="tb-dashboard" onclick="tabGoPage('dashboard')">
+    <span class="tab-ico">🏠</span><span>Início</span>
+  </button>
+  <button class="tab-btn" id="tb-presenca" onclick="tabGoPage('presenca')">
+    <span class="tab-ico">✅</span><span>Presença</span>
+  </button>
+  <button class="tab-btn" id="tb-alunos" onclick="tabGoPage('alunos')">
+    <span class="tab-ico">👥</span><span>Alunos</span>
+  </button>
+  <button class="tab-btn" id="tb-financeiro" onclick="tabGoPage('financeiro')">
+    <span class="tab-ico">💰</span><span>Finanças</span>
+  </button>
+  <button class="tab-btn" id="tb-mais" onclick="abrirMaisMenu()">
+    <span class="tab-ico">☰</span><span>Mais</span>
+  </button>
+</div>
+
+<!-- ── MENU "MAIS" (overlay) ─────────────────────────── -->
+<div class="tab-more-overlay" id="tab-more-overlay" onclick="fecharMaisMenu()"></div>
+<div class="tab-more-menu" id="tab-more-menu">
+  <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
+  <button class="tab-more-item" onclick="tabGoPage('plano');fecharMaisMenu()">
+    <span class="tm-ico">📋</span> Plano de Aula
+  </button>
+  <button class="tab-more-item" onclick="tabGoPage('config');fecharMaisMenu()">
+    <span class="tm-ico">⚙️</span> Configurações
+  </button>
+  <button class="tab-more-item" onclick="toggleTema();fecharMaisMenu()">
+    <span class="tm-ico" id="tab-tema-ico">🌙</span> <span id="tab-tema-label">Tema escuro</span>
+  </button>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -1898,6 +1994,25 @@ function goPage(p, btn){
   document.body.scrollTop = 0;
   const map={dashboard:initDashboard,presenca:initPresenca,alunos:renderAlunos,financeiro:initFin,plano:initPlano,config:initConfig};
   if(map[p]) map[p]();
+}
+
+function tabGoPage(p){
+  const tabMap={dashboard:'tb-dashboard',presenca:'tb-presenca',alunos:'tb-alunos',financeiro:'tb-financeiro',plano:'tb-mais',config:'tb-mais'};
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  const tbId=tabMap[p];
+  if(tbId) document.getElementById(tbId)?.classList.add('active');
+  const navMap={dashboard:0,presenca:1,alunos:2,financeiro:3,plano:4,config:5};
+  const navBtns=document.querySelectorAll('.nav-btn');
+  const idx=navMap[p];
+  goPage(p, idx!==undefined ? navBtns[idx] : null);
+}
+function abrirMaisMenu(){
+  document.getElementById('tab-more-menu').classList.add('open');
+  document.getElementById('tab-more-overlay').classList.add('open');
+}
+function fecharMaisMenu(){
+  document.getElementById('tab-more-menu').classList.remove('open');
+  document.getElementById('tab-more-overlay').classList.remove('open');
 }
 
 function switchTab(ns, tab, btn){
