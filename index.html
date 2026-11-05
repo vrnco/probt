@@ -449,15 +449,16 @@ textarea{resize:vertical;min-height:60px}
   .week-day-label{font-size:clamp(7px,1.6vw,9px);letter-spacing:0;margin-bottom:3px}
   .week-day-num{font-size:clamp(11px,2.5vw,15px);width:22px;height:22px;margin-bottom:3px}
   .week-slot-add{font-size:clamp(7px,1.5vw,9px);padding:2px}
-  /* Sem nav topo — padding-top usa só safe-area-inset-top + pequeno gap */
+  /* Sem nav topo — padding-top usa safe-area + gap generoso para não grudar */
   .page{
-    padding-top:calc(env(safe-area-inset-top) + 12px) !important;
-    /* Espaço embaixo para tab bar (~60px) + safe-area-bottom */
-    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+    padding-top:calc(env(safe-area-inset-top) + 20px) !important;
+    /* Espaço embaixo para tab bar (~60px) + safe-area-bottom + folga */
+    padding-bottom:calc(72px + env(safe-area-inset-bottom)) !important;
   }
   #pg-dashboard{
-    padding-top:calc(env(safe-area-inset-top) + 12px) !important;
-    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+    /* Dashboard tem cabeçalho próprio, precisa de mais espaço no topo */
+    padding-top:calc(env(safe-area-inset-top) + 52px) !important;
+    padding-bottom:calc(72px + env(safe-area-inset-bottom)) !important;
   }
   /* Modal bottom sheet respeita tab bar */
   .modal{
