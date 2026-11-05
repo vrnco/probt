@@ -601,9 +601,15 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   </div>
   <div id="pt-registrar">
     <!-- Filtros: data e turma -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="fillSelPresenca(false);renderPresCards()">
-      <select id="pres-turma" onchange="renderPresCards()" style="flex:2;min-width:160px"></select>
+    <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+      <button onclick="presNavSemana(-1)" title="Semana anterior" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1">‹</button>
+      <input type="date" id="pres-data" style="flex:1;min-width:130px" onchange="fillSelPresenca(false);renderPresCards();atualizarLabelSemanaPresenca()">
+      <button onclick="presNavSemana(1)" title="Próxima semana" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1">›</button>
+      <button onclick="presNavHoje()" title="Hoje" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:700">Hoje</button>
+    </div>
+    <div id="pres-semana-label" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <select id="pres-turma" onchange="renderPresCards()" style="flex:1;min-width:160px"></select>
     </div>
     <!-- Próxima turma -->
     <div style="margin-bottom:10px">
@@ -2304,12 +2310,49 @@ function renderAulasHoje(){
 }
 
 // ===================== PRESENÇA =====================
+function presNavSemana(delta){
+  const el=document.getElementById('pres-data');
+  const base=el.value ? new Date(el.value+'T12:00') : new Date();
+  base.setDate(base.getDate()+delta*7);
+  el.value=base.toISOString().slice(0,10);
+  fillSelPresenca(false);
+  renderPresCards();
+  atualizarLabelSemanaPresenca();
+}
+function presNavHoje(){
+  const el=document.getElementById('pres-data');
+  el.value=today();
+  fillSelPresenca(false);
+  renderPresCards();
+  atualizarLabelSemanaPresenca();
+}
+function atualizarLabelSemanaPresenca(){
+  const el=document.getElementById('pres-data');
+  const lbl=document.getElementById('pres-semana-label');
+  if(!lbl||!el.value)return;
+  const d=new Date(el.value+'T12:00');
+  const t=today();
+  const sel=el.value;
+  // início e fim da semana selecionada (seg–sab)
+  const dow=d.getDay()||7; // 1=seg...7=dom
+  const seg=new Date(d); seg.setDate(d.getDate()-(dow-1));
+  const sab=new Date(seg); sab.setDate(seg.getDate()+5);
+  const fmt=dt=>dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+  const isHoje=sel===t;
+  const isFut=sel>t;
+  const semLabel=`${fmt(seg)} – ${fmt(sab)}`;
+  lbl.innerHTML=isHoje?`<span style="color:var(--green);font-weight:700">📅 Esta semana — ${semLabel}</span>`
+    :isFut?`<span style="color:var(--accent);font-weight:700">📅 Próxima semana — ${semLabel}</span>`
+    :`<span>📅 ${semLabel}</span>`;
+}
+
 function initPresenca(){
   if(!document.getElementById('pres-data').value) document.getElementById('pres-data').value=today();
   fillSel('pres-turma', false);
   fillSel('hist-turma', true);
   fillHistAlunos();
   renderPresCards();
+  atualizarLabelSemanaPresenca();
 }
 function fillSel(id, comTodos){
   const s=document.getElementById(id); if(!s)return;
