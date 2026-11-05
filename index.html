@@ -14,22 +14,57 @@
 <link rel="manifest" id="pwa-manifest">
 <title>Beach Tennis Pro</title>
 <style>
+/* ── Google Font ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ── Tema claro (padrão) ─────────────────────────────────── */
 :root{
-  --bg:#f4f4ef;--card:#fff;--border:#e5e5dc;--text:#1a1a1a;--muted:#888;--accent:#1a6fbd;
-  --accent-light:#e8f2fc;--green:#2d7a2d;--green-bg:#eaf4ea;--red:#b02020;--red-bg:#fceaea;
-  --amber:#8a5000;--amber-bg:#fdf0dc;--purple:#4a3db5;--purple-bg:#eeecfd;
+  --bg:#f8f9fb;--card:#ffffff;--border:#e3e7ed;--text:#12181f;--muted:#5a6472;
+  --accent:#2563eb;--accent-light:#eff6ff;
+  --green:#1db16b;--green-d:#168a54;--green-bg:#d1fae5;--green-text:#065f46;
+  --red:#e53e3e;--red-bg:#fee2e2;--red-text:#991b1b;
+  --amber:#d97706;--amber-bg:#fef3c7;--amber-text:#92400e;
+  --purple:#7c3aed;--purple-bg:#ede9fe;--purple-text:#4c1d95;
+  --shadow:0 2px 12px rgba(0,0,0,.07);
+  color-scheme:light;
 }
+/* ── Tema escuro (automático por SO) ─────────────────────── */
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1318;--card:#1a2030;--border:#2a3344;--text:#e8edf3;--muted:#8a95a5;
+    --accent:#3b82f6;--accent-light:#1e3a5f;
+    --green:#1db16b;--green-d:#168a54;--green-bg:#064e3b;--green-text:#6ee7b7;
+    --red:#ef4444;--red-bg:#7f1d1d;--red-text:#fca5a5;
+    --amber:#f59e0b;--amber-bg:#78350f;--amber-text:#fcd34d;
+    --purple:#8b5cf6;--purple-bg:#3b1f6b;--purple-text:#c4b5fd;
+    --shadow:0 2px 16px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+/* ── Tema escuro (forçado) ───────────────────────────────── */
+:root[data-theme="dark"]{
+  --bg:#0f1318;--card:#1a2030;--border:#2a3344;--text:#e8edf3;--muted:#8a95a5;
+  --accent:#3b82f6;--accent-light:#1e3a5f;
+  --green:#1db16b;--green-d:#168a54;--green-bg:#064e3b;--green-text:#6ee7b7;
+  --red:#ef4444;--red-bg:#7f1d1d;--red-text:#fca5a5;
+  --amber:#f59e0b;--amber-bg:#78350f;--amber-text:#fcd34d;
+  --purple:#8b5cf6;--purple-bg:#3b1f6b;--purple-text:#c4b5fd;
+  --shadow:0 2px 16px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+body{font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
 /* NAV */
-.nav{display:flex;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto;position:fixed;top:0;left:0;right:0;z-index:50;
-  padding-top:env(safe-area-inset-top); padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); /* empurra abaixo do notch/câmera */
+.nav{display:flex;background:var(--card);border-bottom:1px solid var(--border);position:fixed;top:0;left:0;right:0;z-index:50;
+  padding-top:env(safe-area-inset-top);
   padding-left:env(safe-area-inset-left);
   padding-right:env(safe-area-inset-right);
+  box-shadow:var(--shadow);
 }
-.nav-btn{padding:14px 18px;font-size:13px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;transition:.15s}
-.nav-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
-.nav-btn:hover:not(.active){background:#f8f8f4;color:var(--text)}
+.nav-btn{padding:14px 16px;font-size:13px;font-weight:600;background:none;border:none;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;transition:.15s;letter-spacing:.01em}
+.nav-btn.active{color:var(--green);border-bottom-color:var(--green);font-weight:700}
+.nav-btn:hover:not(.active){background:var(--bg);color:var(--text)}
 /* LAYOUT */
 .page{display:none;padding:16px;padding-top:calc(56px + 16px + env(safe-area-inset-top));max-width:960px;margin:0 auto;
   padding-bottom:calc(20px + env(safe-area-inset-bottom));
@@ -41,15 +76,15 @@ body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:v
   padding-right:max(20px, env(safe-area-inset-right));
 }
 /* CARDS */
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:14px}
-.card-sm{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card-sm{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
 /* BUTTONS */
-.btn{padding:7px 13px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;transition:.15s;white-space:nowrap}
+.btn{padding:7px 13px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:13px;cursor:pointer;transition:.15s;white-space:nowrap;font-weight:500}
 .btn:hover{background:var(--bg)}
 .btn-sm{padding:5px 9px;font-size:12px}
 .btn-xs{padding:3px 7px;font-size:11px}
 .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.btn-primary:hover{background:#155fa0}
+.btn-primary:hover{filter:brightness(1.12)}
 .btn-success{background:var(--green);color:#fff;border-color:var(--green)}
 .btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
 .btn-amber{background:var(--amber);color:#fff;border-color:var(--amber)}
@@ -58,8 +93,8 @@ body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:v
 /* Toggle ativo */
 .toggle-ativo-on{background:var(--green);color:#fff;border-color:var(--green)}
 .toggle-ativo-on:hover{background:#1f5c1f}
-.toggle-ativo-off{background:#e0e0d8;color:#888;border-color:#ccc}
-.toggle-ativo-off:hover{background:#d0d0c8}
+.toggle-ativo-off{background:var(--border);color:var(--muted);border-color:var(--border)}
+.toggle-ativo-off:hover{background:var(--muted);color:var(--card)}
 /* Seção inativos */
 .secao-inativos{opacity:.7}
 .secao-inativos .aluno-row{background:transparent}
@@ -79,12 +114,12 @@ textarea{resize:vertical;min-height:60px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* BADGES */
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.b-blue{background:var(--accent-light);color:#0c4480}
-.b-green{background:var(--green-bg);color:#1a5c1a}
-.b-red{background:var(--red-bg);color:var(--red)}
-.b-amber{background:var(--amber-bg);color:var(--amber)}
-.b-gray{background:#f0f0e8;color:#666}
-.b-purple{background:var(--purple-bg);color:var(--purple)}
+.b-blue{background:var(--accent-light);color:var(--accent)}
+.b-green{background:var(--green-bg);color:var(--green-text)}
+.b-red{background:var(--red-bg);color:var(--red-text)}
+.b-amber{background:var(--amber-bg);color:var(--amber-text)}
+.b-gray{background:var(--border);color:var(--muted)}
+.b-purple{background:var(--purple-bg);color:var(--purple-text)}
 /* MODAIS */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:max(calc(env(safe-area-inset-top) + 20px), 56px) 12px max(12px,env(safe-area-inset-bottom));overflow-y:auto}
 .modal-bg.open{display:flex}
@@ -393,13 +428,17 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
   document.documentElement.classList.add('pwa-standalone');
 }
 </script>
-<div class="nav">
-  <button class="nav-btn active" onclick="goPage('dashboard',this)">Dashboard</button>
-  <button class="nav-btn" onclick="goPage('presenca',this)">Presença</button>
-  <button class="nav-btn" onclick="goPage('alunos',this)">Alunos</button>
-  <button class="nav-btn" onclick="goPage('financeiro',this)">Financeiro</button>
-  <button class="nav-btn" onclick="goPage('plano',this)">Plano de Aula</button>
-  <button class="nav-btn" onclick="goPage('config',this)">⚙ Config</button>
+<div class="nav" style="justify-content:space-between;gap:0">
+  <div style="display:flex;overflow-x:auto;flex:1">
+    <button class="nav-btn active" onclick="goPage('dashboard',this)">🏠 Dashboard</button>
+    <button class="nav-btn" onclick="goPage('presenca',this)">✅ Presença</button>
+    <button class="nav-btn" onclick="goPage('alunos',this)">👥 Alunos</button>
+    <button class="nav-btn" onclick="goPage('financeiro',this)">💰 Financeiro</button>
+    <button class="nav-btn" onclick="goPage('plano',this)">📋 Plano de Aula</button>
+    <button class="nav-btn" onclick="goPage('config',this)">⚙ Config</button>
+  </div>
+  <button onclick="toggleTema()" id="btn-tema" title="Alternar tema claro/escuro"
+    style="background:none;border:none;cursor:pointer;padding:10px 14px;font-size:18px;color:var(--muted);flex-shrink:0;border-left:1px solid var(--border)">🌙</button>
 </div>
 
 <!-- ===== DASHBOARD ===== -->
@@ -1762,6 +1801,30 @@ let editRepAlunoId = null;
 let fotoNovoDataUrl = '';
 let matchLancamento = null;
 let semanaOffset = 0;
+
+// ===================== TEMA CLARO/ESCURO =====================
+(function(){
+  const saved = localStorage.getItem('btpTema');
+  if(saved) document.documentElement.setAttribute('data-theme', saved);
+  else if(window.matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.setAttribute('data-theme','dark');
+})();
+function toggleTema(){
+  const root = document.documentElement;
+  const atual = root.getAttribute('data-theme');
+  const novo = atual === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', novo);
+  localStorage.setItem('btpTema', novo);
+  document.getElementById('btn-tema').textContent = novo === 'dark' ? '☀️' : '🌙';
+}
+(function(){
+  const saved = localStorage.getItem('btpTema');
+  const isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const btn = document.getElementById('btn-tema');
+    if(btn) btn.textContent = isDark ? '☀️' : '🌙';
+  });
+})();
 
 // ===================== UTILS =====================
 function today(){ return new Date().toISOString().slice(0,10) }
@@ -4643,14 +4706,8 @@ async function confirmarSplit(){
       cobParaSalvar.push(cob);
     }
     if(s.aluno) nomesConfirmados.push(s.aluno.nome.split(' ')[0]);
-
-    // Salva apelido para auto-confirmar na próxima vez
-    const nNorm = normalize(l.nomeRaw||'');
-    if(s.aluno && nNorm && nNorm.length>4 && !(s.aluno.apelidos||[]).map(ap=>normalize(ap)).includes(nNorm)){
-      if(!s.aluno.apelidos) s.aluno.apelidos=[];
-      s.aluno.apelidos.push(nNorm);
-      sbSalvarAluno(s.aluno).then(()=>salvarCacheLocal());
-    }
+    // ⚠️ NÃO salvar apelido no split: a linha do extrato contém 2+ nomes
+    // juntos, gravar como apelido de cada um causaria falsos positivos no próximo mês.
   }
 
   if(cobParaSalvar.length){
@@ -6034,13 +6091,10 @@ function buildChartFin(ano){
     const cobMes=cobrancas.filter(c=>c.mes===mesStr);
     if(cobMes.length){
       recebidos.push(cobMes.filter(c=>c.pago).reduce((s,c)=>s+c.valor,0));
-      inadimps.push(cobMes.filter(c=>!c.pago).reduce((s,c)=>s+c.valor,0));
-      totais.push(cobMes.reduce((s,c)=>s+c.valor,0));
+      inadimps.push(cobMes.filter(c=>!c.pago&&!c.cancelado).reduce((s,c)=>s+c.valor,0));
+      totais.push(cobMes.filter(c=>!c.cancelado).reduce((s,c)=>s+c.valor,0));
     } else {
-      const tx=0.68+Math.random()*0.28;
-      totais.push(totalPot);
-      recebidos.push(Math.round(totalPot*tx));
-      inadimps.push(Math.round(totalPot*(1-tx)));
+      recebidos.push(0); inadimps.push(0); totais.push(0);
     }
   }
   const ctx=document.getElementById('chart-fin'); if(!ctx)return;
