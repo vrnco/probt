@@ -776,6 +776,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
     </div>
   </div>
 
+  <div id="ft-extrato" style="display:none">
     <!-- Upload zone -->
     <div class="card" style="padding:14px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">📂 Importar arquivo de extrato</div>
@@ -835,7 +836,7 @@ if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)'
       <select id="analise-ano" onchange="renderAnalises()" style="width:auto">
         <script>for(let y=new Date().getFullYear();y>=new Date().getFullYear()-4;y--)document.write(`<option value="${y}">${y}</option>`);</script>
       </select>
-      <span style="font-size:13px;color:var(--muted)">Dados simulados para demonstração</span>
+      <span id="analise-demo-label" style="display:none;font-size:13px;color:var(--amber)">⚠️ Sem cobranças neste ano</span>
     </div>
     <!-- Métricas rápidas -->
     <div class="g4" style="margin-bottom:16px" id="an-metrics"></div>
@@ -6226,6 +6227,10 @@ const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out'
 function renderAnalises(){
   loadChartJs(()=>{
     const ano = parseInt(document.getElementById('analise-ano').value);
+    // mostra label se não há cobranças no ano
+    const temDados = cobrancas.some(c=>c.mes&&c.mes.startsWith(ano));
+    const lbl = document.getElementById('analise-demo-label');
+    if(lbl) lbl.style.display = temDados ? 'none' : 'inline';
     buildAnaliseMetrics(ano);
     buildChartFin(ano);
   });
@@ -6235,12 +6240,27 @@ function buildAnaliseMetrics(ano){
   const totalMensal = alunos.filter(a=>a.ativo).reduce((s,a)=>s+(a.valor||0),0);
   const recAtivos = alunos.filter(a=>a.ativo).length;
   const taxaMedia = cobrancas.length ? Math.round(cobrancas.filter(c=>c.pago).length/cobrancas.length*100) : 0;
-  const inadimplentes = alunos.filter(a=>a.ativo).filter(a=>cobrancas.some(c=>c.alunoId===a.id&&!c.pago)).length;
+  const inadimplentes = alunos.filter(a=>a.ativo).filter(a=>cobrancas.some(c=>c.alunoId===a.id&&!c.pago&&!c.cancelado)).length;
   document.getElementById('an-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Receita mensal potencial</div><div class="metric-value" style="color:var(--green)">${fmtR(totalMensal)}</div></div>
     <div class="metric"><div class="metric-label">Alunos ativos</div><div class="metric-value">${recAtivos}</div></div>
     <div class="metric"><div class="metric-label">Taxa de pagamento</div><div class="metric-value" style="color:${taxaMedia>=80?'var(--green)':'var(--amber)'}">${taxaMedia}%</div></div>
-    <div class="metric"><div class="metric-label">Inadimplentes</div><div class="metric-value" style="color:${inadimplentes>0?'var(--red)':'var(--green)'}">${inadimplentes}</div></div>`;
+    <div class="metric" style="cursor:${inadimplentes>0?'pointer':'default'}" onclick="${inadimplentes>0?'irParaAtraso()':''}" title="${inadimplentes>0?'Ver quem está em atraso':''}">
+      <div class="metric-label">Inadimplentes ${inadimplentes>0?'<span style="font-size:10px;color:var(--muted)">(toque para ver)</span>':''}</div>
+      <div class="metric-value" style="color:${inadimplentes>0?'var(--red)':'var(--green)'}">${inadimplentes}${inadimplentes>0?' 👆':''}</div>
+    </div>`;
+}
+
+function irParaAtraso(){
+  // navega para financeiro > aba Em Atraso
+  goPage('financeiro', document.querySelectorAll('.nav-btn')[3]);
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tb-financeiro')?.classList.add('active');
+  // aguarda render e clica na aba Em Atraso
+  setTimeout(()=>{
+    const abas = document.querySelectorAll('.inner-tab');
+    abas.forEach(a=>{ if(a.textContent.includes('Atraso')) a.click(); });
+  }, 100);
 }
 
 function buildChartFin(ano){
