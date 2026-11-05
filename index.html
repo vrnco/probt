@@ -98,6 +98,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;backgrou
     border-radius:20px 20px 0 0;z-index:49;
     box-shadow:0 -4px 24px rgba(0,0,0,.18);
     padding:16px 12px 8px;
+    max-height:50vh;overflow-y:auto;
   }
   .tab-more-menu.open{display:block}
   .tab-more-item{display:flex;align-items:center;gap:14px;padding:14px 12px;
@@ -1997,6 +1998,7 @@ function goPage(p, btn){
 }
 
 function tabGoPage(p){
+  fecharMaisMenu(); // sempre fecha o menu "Mais" ao navegar
   const tabMap={dashboard:'tb-dashboard',presenca:'tb-presenca',alunos:'tb-alunos',financeiro:'tb-financeiro',plano:'tb-mais',config:'tb-mais'};
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   const tbId=tabMap[p];
