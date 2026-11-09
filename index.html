@@ -453,12 +453,12 @@ textarea{resize:vertical;min-height:60px}
   /* Sem nav topo — padding-top: valor fixo seguro + safe-area */
   .page{
     padding-top:max(56px, calc(env(safe-area-inset-top) + 12px)) !important;
-    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+    padding-bottom:calc(62px + env(safe-area-inset-bottom)) !important;
   }
   #pg-dashboard{
-    /* PWA: safe-area-inset-top cobre o Dynamic Island; fallback fixo de 72px */
-    padding-top:max(72px, calc(env(safe-area-inset-top) + 14px)) !important;
-    padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
+    /* padding-top é definido por JS em ajustarPaddingIOS() — mais confiável no PWA */
+    padding-top:80px !important;
+    padding-bottom:calc(62px + env(safe-area-inset-bottom)) !important;
   }
   /* Modal bottom sheet respeita tab bar */
   .modal{
@@ -490,6 +490,31 @@ textarea{resize:vertical;min-height:60px}
 if(window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches){
   document.documentElement.classList.add('pwa-standalone');
 }
+
+// Ajusta padding-top do dashboard via JS para garantir que fique abaixo do Dynamic Island
+// CSS env() às vezes falha em PWAs iOS; JS lê o valor real computado
+function ajustarPaddingIOS(){
+  if(window.innerWidth > 700) return; // só mobile
+  try {
+    // Cria elemento temporário para ler safe-area-inset-top computado
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';
+    document.body.appendChild(probe);
+    const safeTop = parseInt(getComputedStyle(probe).paddingTop) || 0;
+    document.body.removeChild(probe);
+
+    const dash = document.getElementById('pg-dashboard');
+    if(dash){
+      // safeTop = 0 em browser normal, ~59px no PWA do iPhone 17 Pro Max
+      const pt = safeTop > 0 ? (safeTop + 14) : 80;
+      dash.style.setProperty('padding-top', pt + 'px', 'important');
+    }
+  } catch(e){ /* fallback: CSS 80px fixo já aplicado */ }
+}
+
+// Aplica ao carregar e ao redimensionar
+window.addEventListener('load', function(){ setTimeout(ajustarPaddingIOS, 100); });
+window.addEventListener('resize', ajustarPaddingIOS);
 </script>
 <!-- ── NAV DESKTOP (topo) ─────────────────────────────── -->
 <div class="nav" style="justify-content:space-between;gap:0">
@@ -2056,7 +2081,7 @@ function switchAlunosTab(tab, btn){
 }
 
 // ===================== DASHBOARD =====================
-function initDashboard(){ renderWeekGrid(); renderVagasPanel(); renderAulasHoje(); renderAniversariantes(); }
+function initDashboard(){ renderWeekGrid(); renderVagasPanel(); renderAulasHoje(); renderAniversariantes(); ajustarPaddingIOS(); }
 
 function getSemanaAtual(){
   const base = new Date();
