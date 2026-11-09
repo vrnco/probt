@@ -453,12 +453,12 @@ textarea{resize:vertical;min-height:60px}
   /* Sem nav topo — padding-top: valor fixo seguro + safe-area */
   .page{
     padding-top:max(56px, calc(env(safe-area-inset-top) + 12px)) !important;
-    padding-bottom:calc(62px + env(safe-area-inset-bottom)) !important;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom)) !important;
   }
   #pg-dashboard{
     /* padding-top é definido por JS em ajustarPaddingIOS() — mais confiável no PWA */
-    padding-top:80px !important;
-    padding-bottom:calc(62px + env(safe-area-inset-bottom)) !important;
+    padding-top:70px !important;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom)) !important;
   }
   /* Modal bottom sheet respeita tab bar */
   .modal{
@@ -506,7 +506,7 @@ function ajustarPaddingIOS(){
     const dash = document.getElementById('pg-dashboard');
     if(dash){
       // safeTop = 0 em browser normal, ~59px no PWA do iPhone 17 Pro Max
-      const pt = safeTop > 0 ? (safeTop + 14) : 80;
+      const pt = safeTop > 0 ? (safeTop + 6) : 70;
       dash.style.setProperty('padding-top', pt + 'px', 'important');
     }
   } catch(e){ /* fallback: CSS 80px fixo já aplicado */ }
