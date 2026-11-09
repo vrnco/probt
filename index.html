@@ -449,14 +449,14 @@ textarea{resize:vertical;min-height:60px}
   .week-day-label{font-size:clamp(7px,1.6vw,9px);letter-spacing:0;margin-bottom:3px}
   .week-day-num{font-size:clamp(11px,2.5vw,15px);width:22px;height:22px;margin-bottom:3px}
   .week-slot-add{font-size:clamp(7px,1.5vw,9px);padding:2px}
-  /* Sem nav topo — padding-top usa safe-area + gap */
+  /* Sem nav topo — padding-top: valor fixo seguro + safe-area */
   .page{
-    padding-top:calc(env(safe-area-inset-top) + 12px) !important;
+    padding-top:max(56px, calc(env(safe-area-inset-top) + 12px)) !important;
     padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
   }
   #pg-dashboard{
-    /* Dashboard: safe-area do Dynamic Island + 8px só — conteúdo começa logo abaixo da ilha */
-    padding-top:calc(env(safe-area-inset-top) + 8px) !important;
+    /* Dashboard: garante mínimo de 64px para ficar abaixo do Dynamic Island */
+    padding-top:max(64px, calc(env(safe-area-inset-top) + 10px)) !important;
     padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
   }
   /* Modal bottom sheet respeita tab bar */
