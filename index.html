@@ -115,7 +115,8 @@ body{font-family:'Plus Jakarta Sans',-apple-system,system-ui,sans-serif;backgrou
   padding-bottom:calc(20px + env(safe-area-inset-bottom));
 }
 .page.active{display:block}
-#pg-dashboard{max-width:100%;padding:14px 20px;
+#pg-dashboard{max-width:100%;
+  padding-top:14px;
   padding-bottom:calc(14px + env(safe-area-inset-bottom));
   padding-left:max(20px, env(safe-area-inset-left));
   padding-right:max(20px, env(safe-area-inset-right));
@@ -455,8 +456,8 @@ textarea{resize:vertical;min-height:60px}
     padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
   }
   #pg-dashboard{
-    /* Dashboard: garante mínimo de 64px para ficar abaixo do Dynamic Island */
-    padding-top:max(64px, calc(env(safe-area-inset-top) + 10px)) !important;
+    /* PWA: safe-area-inset-top cobre o Dynamic Island; fallback fixo de 72px */
+    padding-top:max(72px, calc(env(safe-area-inset-top) + 14px)) !important;
     padding-bottom:calc(68px + env(safe-area-inset-bottom)) !important;
   }
   /* Modal bottom sheet respeita tab bar */
