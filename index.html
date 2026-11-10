@@ -7035,7 +7035,10 @@ async function sbSalvarAluno(a){
 }
 async function sbSalvarPresenca(p){
   const payload = { turma_id:p.turmaId, data:p.data, registros:p.registros };
-  await sbUpsert('presencas', payload);
+  if(p._sbId) payload.id = p._sbId;
+  const res = await sbUpsert('presencas', payload);
+  // Guarda o id retornado para futuros saves
+  if(res && res[0] && res[0].id && !p._sbId){ p._sbId = res[0].id; p.id = res[0].id; }
 }
 async function sbSalvarCobranca(c){
   const payloadBase = {
