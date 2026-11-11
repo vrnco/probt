@@ -849,6 +849,7 @@ window.addEventListener('resize', ajustarPaddingIOS);
               </select>
             </div>
           <button class="btn btn-success btn-sm" onclick="aplicarBaixas()" title="Aplica baixa em todos os lançamentos já identificados">✅ Aplicar baixas pendentes</button>
+          <button class="btn btn-sm" id="btn-ver-ignorados" onclick="toggleIgnorados()" style="font-size:11px;color:var(--muted)" title="Ver lançamentos que você marcou para ignorar">🚫 Ignorados</button>
         </div>
       </div>
       <div class="card" style="padding:10px 14px"><div id="extrato-linhas"></div></div>
@@ -4588,6 +4589,26 @@ function similarity(a,b){
   return primeiroMatch ? score : score * 0.3;
 }
 
+// ── IGNORADOS DO EXTRATO ────────────────────────────────
+function getIgnoradosExtrato(){
+  try{ return JSON.parse(localStorage.getItem('extrato_ignorados')||'[]'); }catch(e){ return []; }
+}
+function salvarIgnoradosExtrato(lista){
+  try{ localStorage.setItem('extrato_ignorados', JSON.stringify(lista)); }catch(e){}
+}
+function ignorarLancamento(id){
+  const l = extratoLinhas.find(x=>x.id===id);
+  if(!l) return;
+  // Chave de ignorar: baseada no texto do lançamento (persiste entre uploads)
+  const chave = (l.nomeRaw||l.texto||'').trim().toLowerCase();
+  if(!chave) return;
+  const lista = getIgnoradosExtrato();
+  if(!lista.includes(chave)) lista.push(chave);
+  salvarIgnoradosExtrato(lista);
+  renderExtratoLinhas();
+  showToast('Lançamento ignorado. Não aparecerá nos próximos extratos.');
+}
+
 function renderExtratoLinhas(){
   const c=document.getElementById('extrato-linhas');
   if(!extratoLinhas.length){c.innerHTML='<div class="empty">Sem lançamentos</div>';return;}
@@ -4596,6 +4617,12 @@ function renderExtratoLinhas(){
 
   // Sempre remove linhas de saldo independente do filtro
   lista = lista.filter(l => !/saldo do dia|saldo anterior|saldo final/i.test(l.texto||l.nome||''));
+  // Remove lançamentos ignorados permanentemente
+  const ignorados = getIgnoradosExtrato();
+  lista = lista.filter(l => {
+    const chave = (l.nomeRaw||l.texto||'').trim().toLowerCase();
+    return !ignorados.includes(chave);
+  });
   if(filtro==='creditos')      lista = lista.filter(l=> l.valor === null || l.valor === undefined || l.valor > 0);
   if(filtro==='identificados') lista = lista.filter(l=> l.confirmado && l.manualConfirmado);
   // Pendentes = ainda não confirmados pelo usuário (inclui sugestões automáticas)
@@ -4644,9 +4671,48 @@ function renderExtratoLinhas(){
         ${status}
         ${cob&&cob.pago&&!l.manualConfirmado?`<span class="badge b-green" style="font-size:10px">Pago</span>`:''}
         <button class="btn btn-xs" onclick="abrirMatch(${l.id})">Identificar</button>
+        ${!l.confirmado&&!l.manualConfirmado?`<button class="btn btn-xs" style="background:var(--bg);border-color:var(--border);color:var(--muted);font-size:10px" title="Ocultar este lançamento em todos os extratos futuros" onclick="ignorarLancamento(${l.id})">🚫 Ignorar</button>`:''}
       </div>
     </div>`;
   }).join('');
+}
+
+function toggleIgnorados(){
+  const existing = document.getElementById('painel-ignorados');
+  if(existing){ existing.remove(); return; }
+  const ignorados = getIgnoradosExtrato();
+  const wrap = document.createElement('div');
+  wrap.id = 'painel-ignorados';
+  wrap.style.cssText='margin:8px 0;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:12px';
+  if(!ignorados.length){
+    wrap.innerHTML='<div style="color:var(--muted)">Nenhum lançamento ignorado.</div>';
+  } else {
+    wrap.innerHTML=`<div style="font-weight:700;margin-bottom:8px;color:var(--muted)">🚫 Lançamentos ignorados (${ignorados.length})</div>`+
+      ignorados.map((chave,i)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span style="flex:1;color:var(--text)">${chave}</span>
+          <button class="btn btn-xs" style="color:var(--green);border-color:var(--green)" onclick="restaurarIgnorado(${i})">Restaurar</button>
+        </div>`).join('')+
+      `<button class="btn btn-xs btn-danger" style="margin-top:10px" onclick="limparTodosIgnorados()">🗑️ Limpar todos</button>`;
+  }
+  const refBtn = document.getElementById('btn-ver-ignorados');
+  refBtn?.parentElement?.parentElement?.after(wrap);
+}
+
+function restaurarIgnorado(idx){
+  const lista = getIgnoradosExtrato();
+  lista.splice(idx,1);
+  salvarIgnoradosExtrato(lista);
+  document.getElementById('painel-ignorados')?.remove();
+  renderExtratoLinhas();
+  showToast('Lançamento restaurado.');
+}
+
+function limparTodosIgnorados(){
+  salvarIgnoradosExtrato([]);
+  document.getElementById('painel-ignorados')?.remove();
+  renderExtratoLinhas();
+  showToast('Lista de ignorados limpa.');
 }
 
 let matchModoAtual = 'unico';
