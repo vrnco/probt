@@ -231,7 +231,6 @@
 <div class="legenda">
   <div class="legenda-item"><div class="leg-dot" style="background:var(--green)"></div>Vagas disponíveis</div>
   <div class="legenda-item"><div class="leg-dot" style="background:var(--amber)"></div>Última vaga</div>
-  <div class="legenda-item"><div class="leg-dot" style="background:var(--red)"></div>Turma lotada</div>
 </div>
 
 <!-- MODAL -->
@@ -359,16 +358,17 @@ function renderCalendario(){
     let cardsHTML = '';
     turmasDia.forEach(t => {
       const livres = vagasLivres(t, iso);
-      const cls = livres <= 0 ? 'lotado' : livres === 1 ? 'vaga-pouca' : 'vaga-boa';
-      const vagasTxt = livres <= 0 ? '<strong>Lotada</strong>' :
-        livres === 1 ? `<strong>1</strong> vaga` : `<strong>${livres}</strong> vagas`;
-      const vagasCls = livres <= 0 ? 'lotado' : livres === 1 ? 'pouca' : 'livre';
+      // Oculta turmas lotadas e dias passados
+      if(livres <= 0 || isPast) return;
 
-      if(!isPast && livres > 0){ totalVagas += livres; totalTurmas++; }
+      const cls = livres === 1 ? 'vaga-pouca' : 'vaga-boa';
+      const vagasTxt = livres === 1 ? `<strong>1</strong> vaga` : `<strong>${livres}</strong> vagas`;
+      const vagasCls = livres === 1 ? 'pouca' : 'livre';
 
-      const clickable = !isPast && livres > 0;
+      totalVagas += livres; totalTurmas++;
+
       cardsHTML += `
-        <div class="turma-card ${cls}" ${clickable ? `onclick="abrirModal(${t.id},'${iso}')"` : ''}>
+        <div class="turma-card ${cls}" onclick="abrirModal(${t.id},'${iso}')">
           <div class="tc-hora">${t.hora}</div>
           <div class="tc-nivel ${nivelClass(t.categoria||t.nivel)}">${t.categoria||t.nivel||'Misto'}</div>
           <div class="tc-vagas ${vagasCls}">${vagasTxt}</div>
