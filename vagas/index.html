@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Horários Disponíveis — Beach Tennis</title>
+<meta name="description" content="Veja os horários com vagas disponíveis e agende sua aula experimental de beach tennis.">
+<meta property="og:title" content="Aulas de Beach Tennis — Vagas Disponíveis">
+<meta property="og:description" content="Confira os horários com vagas e agende sua aula!">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0f1a;
+    --card:#131c2e;
+    --card2:#1a2540;
+    --border:#1e2d45;
+    --text:#e8edf5;
+    --muted:#6b7a95;
+    --accent:#2979ff;
+    --accent2:#1565c0;
+    --green:#00c853;
+    --amber:#ffab00;
+    --red:#ff1744;
+    --radius:14px;
+  }
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+
+  /* ── HERO ── */
+  .hero{
+    background:linear-gradient(135deg,#0d1b3e 0%,#1a3a6e 50%,#0d2244 100%);
+    padding:48px 20px 36px;
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::before{
+    content:'🏖️';font-size:120px;opacity:.07;
+    position:absolute;top:-10px;right:-20px;transform:rotate(-15deg);
+    pointer-events:none;
+  }
+  .hero-badge{
+    display:inline-block;background:rgba(41,121,255,.2);border:1px solid rgba(41,121,255,.4);
+    color:#82b1ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    padding:4px 12px;border-radius:20px;margin-bottom:14px;
+  }
+  .hero h1{font-size:clamp(22px,5vw,34px);font-weight:800;line-height:1.2;margin-bottom:8px}
+  .hero h1 span{color:#82b1ff}
+  .hero p{font-size:15px;color:#9bb0d0;max-width:420px;margin:0 auto 20px}
+  .hero-stats{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .hero-stat{background:rgba(255,255,255,.07);border-radius:10px;padding:10px 18px;font-size:13px}
+  .hero-stat strong{display:block;font-size:20px;font-weight:800;color:var(--accent)}
+
+  /* ── FILTROS ── */
+  .filtros{
+    display:flex;gap:8px;padding:16px 16px 0;overflow-x:auto;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  }
+  .filtros::-webkit-scrollbar{display:none}
+  .filtro-btn{
+    flex-shrink:0;padding:7px 16px;border-radius:20px;border:1px solid var(--border);
+    background:var(--card);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;
+    transition:all .2s;white-space:nowrap;
+  }
+  .filtro-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  /* ── NAVEGAÇÃO SEMANA ── */
+  .semana-nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px 8px;
+  }
+  .semana-label{font-size:14px;font-weight:700;color:var(--text)}
+  .semana-label span{font-size:12px;font-weight:400;color:var(--muted);margin-left:6px}
+  .nav-btn{
+    background:var(--card);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px;line-height:1;
+    transition:background .15s;
+  }
+  .nav-btn:hover{background:var(--card2)}
+  .nav-hoje{
+    background:var(--accent);border:none;color:#fff;
+    border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;
+  }
+
+  /* ── CALENDÁRIO ── */
+  .cal-wrap{overflow-x:auto;padding:0 12px 8px;scrollbar-width:none}
+  .cal-wrap::-webkit-scrollbar{display:none}
+  .cal-grid{
+    display:grid;grid-template-columns:repeat(6,1fr);
+    gap:6px;min-width:420px;
+  }
+  .cal-day-header{
+    text-align:center;padding:8px 4px;border-radius:8px;
+    font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;
+    text-transform:uppercase;
+  }
+  .cal-day-header.hoje{color:var(--accent);background:rgba(41,121,255,.1)}
+  .cal-col{display:flex;flex-direction:column;gap:5px}
+
+  /* ── CARD DE TURMA ── */
+  .turma-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:10px;padding:8px 7px;cursor:pointer;
+    transition:transform .15s,box-shadow .15s,border-color .15s;
+    position:relative;overflow:hidden;
+  }
+  .turma-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.35);border-color:var(--accent)}
+  .turma-card.vaga-boa{border-left:3px solid var(--green)}
+  .turma-card.vaga-pouca{border-left:3px solid var(--amber)}
+  .turma-card.lotado{border-left:3px solid var(--red);opacity:.55;cursor:default}
+  .turma-card.lotado:hover{transform:none;box-shadow:none;border-color:var(--red)}
+
+  .tc-hora{font-size:13px;font-weight:800;color:var(--accent);margin-bottom:3px}
+  .tc-nivel{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;display:inline-block;margin-bottom:4px}
+  .tc-vagas{font-size:11px;color:var(--muted)}
+  .tc-vagas strong{font-weight:700}
+  .tc-vagas.livre strong{color:var(--green)}
+  .tc-vagas.pouca strong{color:var(--amber)}
+  .tc-vagas.lotado strong{color:var(--red)}
+
+  /* Cores por nível */
+  .nivel-iniciante{background:rgba(0,200,83,.15);color:#69f0ae}
+  .nivel-intermediario{background:rgba(41,121,255,.15);color:#82b1ff}
+  .nivel-avancado{background:rgba(255,61,0,.15);color:#ff9e80}
+  .nivel-misto{background:rgba(255,171,0,.15);color:#ffe57f}
+  .nivel-feminino{background:rgba(236,64,122,.15);color:#f48fb1}
+  .nivel-outro{background:rgba(107,122,149,.15);color:#b0bec5}
+
+  /* ── MODAL ── */
+  .modal-bg{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+    z-index:100;align-items:flex-end;justify-content:center;
+    backdrop-filter:blur(4px);
+  }
+  .modal-bg.open{display:flex;animation:fadeIn .2s}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:var(--card);border-radius:20px 20px 0 0;
+    width:100%;max-width:480px;padding:24px 20px 36px;
+    animation:slideUp .25s ease-out;
+  }
+  @keyframes slideUp{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px}
+  .modal h2{font-size:20px;font-weight:800;margin-bottom:4px}
+  .modal-meta{font-size:13px;color:var(--muted);margin-bottom:20px}
+  .modal-info{display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
+  .modal-info-row{display:flex;align-items:center;gap:10px;font-size:14px}
+  .modal-info-row .icon{font-size:18px;width:28px;text-align:center}
+  .modal-info-row strong{font-weight:700;min-width:60px}
+  .modal-info-row span{color:var(--muted)}
+
+  .btn-wpp{
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    width:100%;padding:16px;border-radius:14px;border:none;cursor:pointer;
+    background:linear-gradient(135deg,#25d366,#128c7e);
+    color:#fff;font-size:16px;font-weight:800;
+    box-shadow:0 4px 20px rgba(37,211,102,.3);
+    transition:transform .15s,box-shadow .15s;
+  }
+  .btn-wpp:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(37,211,102,.4)}
+  .btn-wpp svg{width:22px;height:22px;fill:#fff;flex-shrink:0}
+
+  .btn-fechar{
+    display:block;width:100%;margin-top:12px;padding:12px;border-radius:12px;
+    border:1px solid var(--border);background:transparent;color:var(--muted);
+    font-size:14px;cursor:pointer;
+  }
+
+  /* ── LEGENDA ── */
+  .legenda{
+    display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
+    padding:12px 16px;font-size:12px;color:var(--muted);
+  }
+  .legenda-item{display:flex;align-items:center;gap:5px}
+  .leg-dot{width:10px;height:10px;border-radius:2px}
+
+  /* ── VAZIO / LOADING ── */
+  .loading{text-align:center;padding:48px 20px;color:var(--muted)}
+  .loading-spin{
+    width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);
+    border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .empty-col{text-align:center;padding:12px 4px;font-size:11px;color:var(--border)}
+
+  /* ── FOOTER ── */
+  .footer{text-align:center;padding:24px 16px 36px;font-size:12px;color:var(--muted)}
+  .footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">🏖️ Beach Tennis</div>
+  <h1>Horários com <span>Vagas Disponíveis</span></h1>
+  <p>Escolha o melhor horário para você e agende sua aula diretamente pelo WhatsApp.</p>
+  <div class="hero-stats" id="hero-stats">
+    <div class="hero-stat"><strong id="stat-vagas">—</strong>vagas disponíveis</div>
+    <div class="hero-stat"><strong id="stat-turmas">—</strong>turmas esta semana</div>
+  </div>
+</div>
+
+<!-- FILTROS -->
+<div class="filtros" id="filtros">
+  <button class="filtro-btn on" data-filtro="todos" onclick="setFiltro('todos',this)">Todos</button>
+</div>
+
+<!-- NAVEGAÇÃO SEMANA -->
+<div class="semana-nav">
+  <button class="nav-btn" onclick="navSemana(-1)">‹</button>
+  <div>
+    <span class="semana-label" id="semana-label">—<span id="semana-sub"></span></span>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button class="nav-hoje" onclick="navHoje()">Hoje</button>
+    <button class="nav-btn" onclick="navSemana(1)">›</button>
+  </div>
+</div>
+
+<!-- CALENDÁRIO -->
+<div class="cal-wrap">
+  <div class="cal-grid" id="cal-grid">
+    <div class="loading" style="grid-column:1/-1">
+      <div class="loading-spin"></div>
+      <div>Carregando horários...</div>
+    </div>
+  </div>
+</div>
+
+<!-- LEGENDA -->
+<div class="legenda">
+  <div class="legenda-item"><div class="leg-dot" style="background:var(--green)"></div>Vagas disponíveis</div>
+  <div class="legenda-item"><div class="leg-dot" style="background:var(--amber)"></div>Última vaga</div>
+  <div class="legenda-item"><div class="leg-dot" style="background:var(--red)"></div>Turma lotada</div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="fecharModal(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="modal-hora">—</h2>
+    <div class="modal-meta" id="modal-meta">—</div>
+    <div class="modal-info" id="modal-info"></div>
+    <button class="btn-wpp" id="btn-wpp" onclick="abrirWpp()">
+      <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.561 4.14 1.535 5.874L.057 23.882l6.197-1.624A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.788 9.788 0 01-5.001-1.372l-.359-.214-3.72.976.994-3.627-.234-.373A9.77 9.77 0 012.182 12c0-5.42 4.398-9.818 9.818-9.818 5.42 0 9.818 4.398 9.818 9.818 0 5.42-4.398 9.818-9.818 9.818z"/></svg>
+      Quero agendar minha aula!
+    </button>
+    <button class="btn-fechar" onclick="document.getElementById('modal-bg').classList.remove('open')">Fechar</button>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  Dúvidas? Fale pelo <a href="https://wa.me/5518996590051" target="_blank">WhatsApp</a>
+</div>
+
+<script>
+const SB_URL = 'https://lpyyxksilepemolxhcnu.supabase.co';
+const SB_KEY = 'sb_publishable_m-9tHbZkCJ-XW_-UydGGGQ_2Ldjpa6X';
+const WPP    = '5518996590051';
+
+const DIAS = ['seg','ter','qua','qui','sex','sab'];
+const DIAS_LABEL = ['SEG','TER','QUA','QUI','SEX','SÁB'];
+const DIAS_FULL  = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+let turmas = [];
+let avisosFalta = [];
+let semanaOffset = 0; // 0 = semana atual
+let filtroAtivo = 'todos';
+let modalTurma = null;
+let modalData  = null;
+
+// ── SUPABASE ────────────────────────────────────────────
+async function sbGet(tabela, params=''){
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${params}`, {
+    headers:{ 'apikey':SB_KEY, 'Authorization':'Bearer '+SB_KEY,
+              'Content-Type':'application/json' }
+  });
+  if(!r.ok) return [];
+  return r.json();
+}
+
+// ── UTILS ───────────────────────────────────────────────
+function today(){ return new Date().toISOString().slice(0,10); }
+
+function semanaInicio(offset=0){
+  const d = new Date();
+  const dow = d.getDay()||7; // 1=seg
+  d.setDate(d.getDate() - (dow-1) + offset*7);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function isoDate(d){ return d.toISOString().slice(0,10); }
+
+function fmtDia(iso){
+  const [,m,d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
+function nivelClass(nivel){
+  const n = (nivel||'').toLowerCase();
+  if(n.includes('inici')) return 'nivel-iniciante';
+  if(n.includes('inter')) return 'nivel-intermediario';
+  if(n.includes('avan'))  return 'nivel-avancado';
+  if(n.includes('femin')) return 'nivel-feminino';
+  if(n.includes('misto')) return 'nivel-misto';
+  return 'nivel-outro';
+}
+
+function vagasLivres(t, iso){
+  // Conta alunos ativos na turma
+  const ocupadas = (t.alunos||[]).length;
+  // Soma avisos de falta (liberam vaga temporária) — ignora para a página pública
+  return Math.max(0, (t.vagas||6) - ocupadas);
+}
+
+// ── RENDER ──────────────────────────────────────────────
+function renderCalendario(){
+  const seg = semanaInicio(semanaOffset);
+  const todayStr = today();
+
+  // Label da semana
+  const fim = new Date(seg); fim.setDate(seg.getDate()+5);
+  const fmtOpt = {day:'2-digit',month:'short'};
+  document.getElementById('semana-label').childNodes[0].textContent =
+    seg.toLocaleDateString('pt-BR',fmtOpt)+' – '+fim.toLocaleDateString('pt-BR',fmtOpt);
+
+  const isHojeSemana = semanaOffset === 0;
+  document.getElementById('semana-sub').textContent = isHojeSemana ? ' · Esta semana' : '';
+
+  const grid = document.getElementById('cal-grid');
+
+  // Filtra turmas pelo filtro ativo
+  const turmasFiltradas = filtroAtivo === 'todos'
+    ? turmas
+    : turmas.filter(t => (t.categoria||t.nivel||'').toLowerCase() === filtroAtivo.toLowerCase());
+
+  // Conta vagas e turmas para o hero
+  let totalVagas = 0, totalTurmas = 0;
+
+  // Monta colunas
+  let headerHTML = '';
+  let colsHTML   = '';
+
+  DIAS.forEach((dia, i) => {
+    const data = new Date(seg); data.setDate(seg.getDate()+i);
+    const iso  = isoDate(data);
+    const isHoje = iso === todayStr;
+    const isPast = iso < todayStr;
+
+    headerHTML += `<div class="cal-day-header${isHoje?' hoje':''}">${DIAS_LABEL[i]}<br><span style="font-size:10px;font-weight:400">${fmtDia(iso)}</span></div>`;
+
+    // Turmas deste dia
+    const turmasDia = turmasFiltradas
+      .filter(t => t.dias.includes(dia))
+      .sort((a,b) => a.hora.localeCompare(b.hora));
+
+    let cardsHTML = '';
+    turmasDia.forEach(t => {
+      const livres = vagasLivres(t, iso);
+      const cls = livres <= 0 ? 'lotado' : livres === 1 ? 'vaga-pouca' : 'vaga-boa';
+      const vagasTxt = livres <= 0 ? '<strong>Lotada</strong>' :
+        livres === 1 ? `<strong>1</strong> vaga` : `<strong>${livres}</strong> vagas`;
+      const vagasCls = livres <= 0 ? 'lotado' : livres === 1 ? 'pouca' : 'livre';
+
+      if(!isPast && livres > 0){ totalVagas += livres; totalTurmas++; }
+
+      const clickable = !isPast && livres > 0;
+      cardsHTML += `
+        <div class="turma-card ${cls}" ${clickable ? `onclick="abrirModal(${t.id},'${iso}')"` : ''}>
+          <div class="tc-hora">${t.hora}</div>
+          <div class="tc-nivel ${nivelClass(t.categoria||t.nivel)}">${t.categoria||t.nivel||'Misto'}</div>
+          <div class="tc-vagas ${vagasCls}">${vagasTxt}</div>
+        </div>`;
+    });
+
+    if(!cardsHTML) cardsHTML = `<div class="empty-col">—</div>`;
+    colsHTML += `<div class="cal-col">${cardsHTML}</div>`;
+  });
+
+  grid.innerHTML = headerHTML + colsHTML;
+
+  // Atualiza hero stats
+  document.getElementById('stat-vagas').textContent = totalVagas;
+  document.getElementById('stat-turmas').textContent = totalTurmas;
+}
+
+function setFiltro(valor, btn){
+  filtroAtivo = valor;
+  document.querySelectorAll('.filtro-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderCalendario();
+}
+
+function navSemana(delta){
+  semanaOffset += delta;
+  renderCalendario();
+}
+
+function navHoje(){
+  semanaOffset = 0;
+  renderCalendario();
+}
+
+// ── MODAL ───────────────────────────────────────────────
+function abrirModal(turmaId, iso){
+  const t = turmas.find(x=>x.id===turmaId);
+  if(!t) return;
+  modalTurma = t;
+  modalData  = iso;
+
+  const dowIdx = DIAS.indexOf(['dom','seg','ter','qua','qui','sex','sab'][new Date(iso+'T12:00').getDay()]);
+  const diaFull = DIAS_FULL[dowIdx] || '';
+  const livres  = vagasLivres(t, iso);
+  const [y,m,d] = iso.split('-');
+
+  document.getElementById('modal-hora').textContent = t.hora;
+  document.getElementById('modal-meta').textContent = `${diaFull}, ${d}/${m}/${y}`;
+
+  document.getElementById('modal-info').innerHTML = `
+    <div class="modal-info-row"><span class="icon">📋</span><strong>Turma</strong><span>${t.nome}</span></div>
+    <div class="modal-info-row"><span class="icon">🎯</span><strong>Nível</strong><span class="tc-nivel ${nivelClass(t.categoria||t.nivel)}" style="padding:3px 8px;border-radius:6px">${t.categoria||t.nivel||'Misto'}</span></div>
+    <div class="modal-info-row"><span class="icon">👥</span><strong>Vagas</strong><span style="color:${livres===1?'var(--amber)':'var(--green)'};font-weight:700">${livres} vaga${livres!==1?'s':''} disponíve${livres!==1?'is':'l'}</span></div>
+    <div class="modal-info-row"><span class="icon">⏱️</span><strong>Horário</strong><span>${t.hora} — aprox. 1h de aula</span></div>
+  `;
+
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function fecharModal(e){
+  if(e.target === document.getElementById('modal-bg'))
+    document.getElementById('modal-bg').classList.remove('open');
+}
+
+function abrirWpp(){
+  if(!modalTurma||!modalData) return;
+  const [y,m,d] = modalData.split('-');
+  const dowIdx = DIAS.indexOf(['dom','seg','ter','qua','qui','sex','sab'][new Date(modalData+'T12:00').getDay()]);
+  const diaFull = DIAS_FULL[dowIdx]||'';
+  const nivel = modalTurma.categoria||modalTurma.nivel||'Misto';
+  const msg = `Olá! Vi que tem vaga na turma de beach tennis:\n\n`+
+    `🏖️ *${modalTurma.nome}*\n`+
+    `🕐 Horário: *${modalTurma.hora}* — ${diaFull}, ${d}/${m}/${y}\n`+
+    `🎯 Nível: *${nivel}*\n\n`+
+    `Gostaria de agendar uma aula experimental! 😊`;
+  window.open(`https://wa.me/${WPP}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// ── FILTROS DINÂMICOS ────────────────────────────────────
+function montarFiltros(){
+  const categorias = [...new Set(turmas.map(t=>t.categoria||t.nivel||'Misto').filter(Boolean))].sort();
+  const wrap = document.getElementById('filtros');
+  // Mantém "Todos"
+  categorias.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'filtro-btn';
+    btn.dataset.filtro = cat;
+    btn.textContent = cat;
+    btn.onclick = ()=>setFiltro(cat,btn);
+    wrap.appendChild(btn);
+  });
+}
+
+// ── INIT ────────────────────────────────────────────────
+async function init(){
+  try {
+    const [rawTurmas] = await Promise.all([
+      sbGet('turmas','order=hora&select=id,hora,dias,nome,vagas,nivel,categoria,alunos'),
+    ]);
+    turmas = rawTurmas.map(r=>({
+      id: r.id,
+      hora: r.hora,
+      dias: r.dias||[],
+      nome: r.nome,
+      vagas: r.vagas||6,
+      nivel: r.nivel||r.categoria||'Misto',
+      categoria: r.categoria||r.nivel||'Misto',
+      alunos: r.alunos||[],
+    }));
+
+    montarFiltros();
+    renderCalendario();
+  } catch(e){
+    document.getElementById('cal-grid').innerHTML =
+      '<div class="loading" style="grid-column:1/-1">⚠️ Erro ao carregar horários.<br>Tente novamente em instantes.</div>';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
